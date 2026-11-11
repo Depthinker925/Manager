@@ -1,0 +1,779 @@
+/* Manager 1.0.0 - 一条线，两层字
+
+   整页只有两种材料：文字和一条发丝线。范围切换是纯文字，选中只换颜色，
+   悬停不变色。四个图标固定在右侧，不参与横向滚动。分割线在文件夹过多时
+   变成一条 2px 的滑条，平时不出现。
+
+   数值沿用 4/8/12/16/24/32 的间距与 11/12/13/16/18 的字号，只有这些值。 */
+
+:root,
+body {
+	--mg-hair: var(--background-modifier-border, rgba(128, 128, 128, 0.24));
+	--mg-fill: var(--background-modifier-hover, rgba(128, 128, 128, 0.1));
+	--mg-outline: color-mix(in srgb, var(--text-muted) 45%, transparent);
+	--mg-scroll: color-mix(in srgb, var(--text-faint) 30%, transparent);
+	--mg-actions: 122px;
+	--mg-dur: 130ms;
+	--mg-ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+@supports not (background: color-mix(in srgb, red 10%, transparent)) {
+	:root,
+	body {
+		--mg-outline: rgba(128, 128, 128, 0.45);
+		--mg-scroll: rgba(128, 128, 128, 0.42);
+	}
+}
+
+.view-content.mg-view {
+	padding: 0;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	/* 不确定字体的话, 换了主题就会掉进 --font-text, 那是正文字体,
+	   有的主题是衬线, 一整列文件名会突然变成书里的样子. */
+	font-family: var(--font-interface, var(--font-text, inherit));
+	font-size: 13px;
+	color: var(--text-normal);
+}
+
+.mg-page {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+	/* 两层留白, 和 Thinker 一致: 页面 32, 行内再 12, 文字距窗口 44,
+	   分割线和行背景距窗口 32. */
+	padding: 16px 32px 0;
+	box-sizing: border-box;
+	/* 按视图自己的宽度算, 不按窗口: 同一个插件在侧栏和主区宽度差一倍. */
+	container-type: inline-size;
+}
+
+/* ---------- 启动遮罩 ----------
+
+   Obsidian 先把上次的 layout 画出来才会回调 onLayoutReady，所以"布局好了
+   再收侧栏"必然慢一帧，看到的就是侧栏闪一下再关。这两条规则在 onload
+   就生效，把左栏和主区域从画面里拿掉，等 Manager 铺好再放出来。
+
+   左栏用 display: none 而不是 visibility：它收起时宽度是 0，但 ribbon 还在，
+   布局一变就会看到图标跳位。主区域用 visibility，占着位置不塌。 */
+
+body.mg-booting-left .workspace .workspace-split.mod-left-split,
+body.mg-booting-left .workspace .workspace-ribbon.side-dock-ribbon.mod-left {
+	display: none;
+}
+
+body.mg-booting-main .workspace-split.mod-root {
+	visibility: hidden;
+}
+
+/* 收起侧栏时按住过渡，否则收起这个动作本身就是那一下闪。 */
+.mg-no-transition,
+.mg-no-transition * {
+	transition: none !important;
+}
+
+.mg-setting-textarea {
+	width: 100%;
+	min-height: 88px;
+	font-family: var(--font-monospace);
+	font-size: 12px;
+	resize: vertical;
+}
+
+/* 按钮的默认外形全部清掉：这里没有胶囊，没有描边，没有浮起的填充。
+   只清外观不动 padding，各组件按自己的尺寸写内边距，这样不会互相覆盖。 */
+.mg-view button,
+.mg-menu-item {
+	appearance: none;
+	-webkit-appearance: none;
+	background: none;
+	border: none;
+	box-shadow: none;
+	margin: 0;
+	font-family: inherit;
+	font-weight: inherit;
+	cursor: pointer;
+}
+
+/* ---------- 范围行 ----------
+
+   一线到底：范围文字、分割线、四个图标同处一行。图标在滚动区之外，
+   文件夹再多也不会被推走。 */
+
+/* 一行固定 34: 文字和图标都在这一行里垂直居中, 所以两者的中线天然重合.
+   之前文字靠 padding-bottom 顶上去, 图标居中在整行, 差 5px, 看着图标偏高.
+   滚动条落在范围区底部, 正好压在分割线上. */
+.mg-nav {
+	position: relative;
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	height: 36px;
+	margin: 0;
+	border-bottom: 0.5px solid var(--mg-hair);
+}
+
+/* 溢出的那一侧淡出去. 用 mask 让内容自己变透明, 而不是盖一层渐变:
+   盖层只能遮住它覆盖的那一截, 再往左的字还是硬的. */
+.mg-nav.is-overflow .mg-tabs {
+	-webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), rgba(0, 0, 0, 0));
+	mask-image: linear-gradient(to right, #000 calc(100% - 40px), rgba(0, 0, 0, 0));
+}
+
+.mg-tabs {
+	flex: 1 1 auto;
+	min-width: 0;
+	height: 100%;
+	display: flex;
+	align-items: center;
+	/* 间距跟着字号走, 不用固定的 18px. 界面缩放一档, 字和间距一起缩,
+	   比例不变, 就不会出现字变小、空隙没变的那种散. */
+	font-size: 14px;
+	gap: 1.4em;
+	overflow-x: auto;
+	overflow-y: hidden;
+}
+
+/* 分割线变滑条：高度只有 2px，颜色比发丝线略深一点，不占第二行。 */
+.mg-tabs::-webkit-scrollbar {
+	height: 2px;
+}
+
+.mg-tabs::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+/* 滑条压在分割线上, 它两段的亮度必须接近, 否则线会断成深浅两截.
+   平时几乎就是线本身, 拖的时候才亮起来. */
+.mg-tabs::-webkit-scrollbar-thumb {
+	background: color-mix(in srgb, var(--text-faint) 55%, transparent);
+	border-radius: 1px;
+}
+
+.mg-tabs::-webkit-scrollbar-thumb:hover {
+	background: color-mix(in srgb, var(--text-faint) 68%, transparent);
+}
+
+.mg-tab {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	height: 100%;
+	padding: 0;
+	font-size: inherit;
+	line-height: 1.3;
+	letter-spacing: 0.02em;
+	color: var(--text-muted);
+	white-space: nowrap;
+	max-width: 200px;
+	transition: color var(--mg-dur) var(--mg-ease);
+}
+
+.mg-tab-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* 视图用图标表示, 占的横向空间只有文字的三分之一. */
+.mg-tab.is-icon {
+	padding: 0 2px;
+}
+
+.mg-tab-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.mg-tab-icon svg {
+	width: 16px;
+	height: 16px;
+	stroke-width: 1.7;
+}
+
+/* 悬停不变色，这是明确要求：只有选中才换颜色。 */
+.mg-tab:hover {
+	color: var(--text-muted);
+}
+
+/* 三种看全库的方式和库里的文件夹之间多留一格. 不加分隔符,
+   靠接近性分组, 低缩放下也不会糊成一串. */
+.mg-tab.is-group-start {
+	margin-left: 1.6em;
+}
+
+/* 选中只换颜色, 不加框不加线. 小字在深色下色差不够, 用一丝描边补重量,
+   它不改变字宽, 所以切换时后面的项不会跟着挪. */
+.mg-tab.is-on {
+	color: var(--text-normal);
+	text-shadow: 0 0 0.35px currentColor;
+}
+
+/* 键盘走到这里时要看得见落在哪. 鼠标点击不会触发 focus-visible,
+   所以这一圈不会出现在正常阅读里. */
+.mg-tab:focus-visible,
+.mg-icon:focus-visible,
+.mg-menu-item:focus-visible {
+	outline: 1px solid var(--mg-outline);
+	outline-offset: 2px;
+	border-radius: 4px;
+}
+
+.mg-actions {
+	flex: 0 0 auto;
+	height: 100%;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding-left: 12px;
+}
+
+.mg-icon {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	padding: 0;
+	border-radius: 6px;
+	color: var(--text-muted);
+	transition: color var(--mg-dur) var(--mg-ease), background-color var(--mg-dur) var(--mg-ease);
+}
+
+/* 只换颜色, 不铺底色. 点完加号光标还停在按钮上, 一铺底色它就成了一块
+   和另外三个不一样的方块. */
+.mg-icon:hover {
+	color: var(--text-normal);
+}
+
+.mg-icon.is-on {
+	color: var(--text-normal);
+}
+
+.mg-icon svg {
+	width: 16px;
+	height: 16px;
+	stroke-width: 1.6;
+}
+
+/* ---------- 搜索 ----------
+
+   从图标左边长出来的一层，盖住范围文字。宽度从零到整个范围区，缓动是
+   起步慢、收尾快的加速曲线，所以看起来是抽出来的，不是弹出来的。 */
+
+.mg-search {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: auto;
+	right: var(--mg-actions);
+	width: 0;
+	display: flex;
+	align-items: center;
+	overflow: hidden;
+	opacity: 0;
+	pointer-events: none;
+	background: var(--background-primary);
+	transition: width 220ms cubic-bezier(0.4, 0, 1, 1), opacity 90ms linear;
+}
+
+.mg-search.is-open {
+	width: calc(100% - var(--mg-actions));
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.mg-search-box {
+	display: flex;
+	align-items: center;
+	width: 100%;
+	height: 26px;
+	margin: 0;
+	border: 1px solid var(--mg-hair);
+	border-radius: 6px;
+	overflow: hidden;
+}
+
+/* 不做高亮：没有 focus 环，没有底色，光标就是全部的提示。 */
+.mg-search-input,
+.mg-search-input:focus {
+	flex: 1 1 auto;
+	min-width: 0;
+	height: 100%;
+	padding: 0 8px;
+	border: none;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+	outline: none;
+	font-family: inherit;
+	font-size: 12px;
+	color: var(--text-normal);
+}
+
+.mg-search-input::placeholder {
+	color: var(--text-faint);
+}
+
+/* ---------- 状态行 ----------
+
+   只在有话要说的时候占一行：创建中、调整中、搜索中、被过滤时。
+   平时高度为零，列表不会因为它少一行。 */
+
+.mg-status {
+	flex: 0 0 auto;
+	height: 0;
+	overflow: hidden;
+	padding: 0 12px;
+	font-size: 11px;
+	line-height: 22px;
+	color: var(--text-faint);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	transition: height var(--mg-dur) var(--mg-ease);
+}
+
+.mg-status.is-on {
+	height: 22px;
+}
+
+/* ---------- 列表 ---------- */
+
+.mg-list {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+	padding: 10px 0 32px;
+}
+
+.mg-list::-webkit-scrollbar {
+	width: 3px;
+}
+
+.mg-list::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.mg-list::-webkit-scrollbar-thumb {
+	background: var(--mg-scroll);
+	border-radius: 2px;
+}
+
+/* ---------- 文件夹标题 ----------
+
+   层级只由字号表达，不缩进、不加前缀。这一栏最大的字是第一层文件夹，
+   下一层降一档，笔记保持正文字号并共用同一个左边界。 */
+
+.mg-folder {
+	position: relative;
+	display: flex;
+	align-items: baseline;
+	gap: 0;
+	padding: 0 12px;
+	cursor: default;
+}
+
+.mg-folder-name {
+	flex: 1 1 auto;
+	min-width: 0;
+	font-weight: 600;
+	color: var(--text-normal);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.mg-folder-count {
+	flex: 0 0 auto;
+	margin-left: 8px;
+	font-size: 11px;
+	color: var(--text-faint);
+	font-variant-numeric: tabular-nums;
+}
+
+.mg-folder.is-level-1 {
+	margin-top: 14px;
+	padding-top: 10px;
+	padding-bottom: 4px;
+	border-top: 0.5px solid var(--mg-hair);
+}
+
+.mg-list > .mg-folder.is-level-1:first-child {
+	margin-top: 2px;
+	padding-top: 0;
+	border-top: none;
+}
+
+.mg-folder.is-level-1 .mg-folder-name {
+	font-size: 18px;
+	line-height: 1.3;
+}
+
+.mg-folder.is-level-2 {
+	margin-top: 14px;
+	padding-bottom: 4px;
+}
+
+.mg-folder.is-level-2 .mg-folder-name {
+	font-size: 16px;
+	line-height: 1.3;
+}
+
+.mg-folder.is-level-3 {
+	margin-top: 10px;
+}
+
+.mg-folder.is-level-3 .mg-folder-name {
+	font-size: 13px;
+	line-height: 1.35;
+	color: var(--text-muted);
+}
+
+.mg-folder.is-level-4 {
+	margin-top: 8px;
+}
+
+.mg-folder.is-level-4 .mg-folder-name {
+	font-size: 13px;
+	line-height: 1.4;
+	color: var(--text-muted);
+}
+
+/* 收起后才出现的符号. 它压在行的左内边距上, 用负外边距把自己的宽度抵掉,
+   所以标题从展开到收起一个像素都不动, 和下面的笔记永远同一条左边线.
+   早先版本让符号把标题推开 20px, 折叠时整行会往右跳一下. */
+.mg-chevron {
+	flex: 0 0 auto;
+	align-self: center;
+	display: flex;
+	align-items: center;
+	width: 12px;
+	margin-left: -12px;
+	opacity: 0;
+	transform: translateX(-4px);
+	color: var(--text-faint);
+	transition: opacity var(--mg-dur) var(--mg-ease), transform var(--mg-dur) var(--mg-ease);
+}
+
+.mg-chevron svg {
+	width: 12px;
+	height: 12px;
+	stroke-width: 1.8;
+}
+
+.mg-folder:not(.is-open) .mg-chevron {
+	opacity: 1;
+	transform: none;
+}
+
+/* 收起的内容用一行省略号代替，位置就在它原来该出现的地方。 */
+.mg-dots {
+	padding: 0 12px;
+	line-height: 26px;
+	font-size: 13px;
+	letter-spacing: 2px;
+	color: var(--text-faint);
+}
+
+/* ---------- 笔记 ---------- */
+
+.mg-note {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	height: 30px;
+	padding: 0 12px;
+	border-radius: 6px;
+	cursor: pointer;
+	transition: background-color var(--mg-dur) var(--mg-ease);
+}
+
+.mg-note.is-two-line {
+	height: 40px;
+}
+
+.mg-note:hover {
+	background: var(--mg-fill);
+}
+
+.mg-note-main {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	min-width: 0;
+}
+
+.mg-note-title {
+	font-size: 13px;
+	line-height: 1.4;
+	color: var(--text-normal);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.mg-note-meta {
+	font-size: 11px;
+	line-height: 1.4;
+	color: var(--text-muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.mg-note-when {
+	margin-left: auto;
+	flex: 0 0 auto;
+	font-size: 11px;
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+/* 空状态两行: 一行说现在没有什么, 一行说下一步做什么.
+   只有第一行的时候, 空文件夹看上去像出错了. */
+.mg-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	padding: 40px 24px;
+	text-align: center;
+}
+
+.mg-empty-title {
+	font-size: 12px;
+	line-height: 1.6;
+	color: var(--text-muted);
+}
+
+.mg-empty-hint {
+	font-size: 11px;
+	line-height: 1.6;
+	color: var(--text-faint);
+}
+
+/* ---------- 改名 ---------- */
+
+.mg-note.is-renaming {
+	background: transparent;
+}
+
+.mg-rename,
+.mg-rename:focus {
+	flex: 1 1 auto;
+	min-width: 0;
+	height: 24px;
+	padding: 0;
+	border: none;
+	border-bottom: 1px solid var(--mg-outline);
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+	outline: none;
+	font-family: inherit;
+	font-size: 13px;
+	color: var(--text-normal);
+}
+
+/* ---------- 拖拽 ---------- */
+
+.mg-list.is-reorder .mg-note,
+.mg-list.is-reorder .mg-folder {
+	cursor: grab;
+	user-select: none;
+}
+
+.mg-tabs.is-reorder .mg-tab {
+	cursor: grab;
+	user-select: none;
+}
+
+.mg-tab.is-dragging,
+.mg-note.is-dragging,
+.mg-folder.is-dragging {
+	opacity: 0.35;
+	cursor: grabbing;
+}
+
+/* 落到文件夹标题上是要移进去，落到笔记上是要插到它前面。两种提示不能
+   长得一样，否则松手前分不清会发生什么。 */
+.mg-folder.is-drop-into {
+	box-shadow: inset 0 0 0 1px var(--mg-outline);
+	border-radius: 6px;
+}
+
+.mg-note.is-drop {
+	box-shadow: inset 0 1px 0 var(--mg-outline);
+}
+
+/* 拖动时用下划线标出落点, 只变亮的话在深色主题里几乎看不出来. */
+.mg-tab.is-drop {
+	color: var(--text-normal);
+	box-shadow: inset 0 -2px 0 var(--text-muted);
+}
+
+/* ---------- 创建 ---------- */
+
+.mg-tabs.is-creating .mg-tab,
+.mg-list.is-creating .mg-folder {
+	cursor: pointer;
+}
+
+.mg-list.is-creating .mg-note {
+	cursor: default;
+}
+
+/* ---------- 浮出小面板 ---------- */
+
+.mg-menu {
+	position: fixed;
+	z-index: 9999;
+	min-width: 132px;
+	padding: 4px;
+	background: var(--background-primary);
+	border: 1px solid var(--mg-hair);
+	border-radius: 8px;
+	box-shadow: var(--shadow-l, 0 8px 24px rgba(0, 0, 0, 0.22));
+}
+
+/* 选择器带上前缀，压过上面那条把 padding 归零的重置规则。 */
+.mg-menu .mg-menu-item {
+	display: flex;
+	align-items: center;
+	width: 100%;
+	height: 30px;
+	padding: 0 10px;
+	border: none;
+	border-radius: 5px;
+	background: transparent;
+	font-size: 12px;
+	color: var(--text-normal);
+	text-align: left;
+}
+
+.mg-menu .mg-menu-item:hover {
+	background: var(--mg-fill);
+}
+
+/* ---------- 窄视图 ----------
+
+   在侧栏里打开时视图可能只有 300 出头, 四个图标加两个文件夹就挤满了.
+   按容器宽度收一档: 间距、图标、名字上限一起缩, 不动字号. */
+
+@container (max-width: 340px) {
+	.mg-nav {
+		--mg-actions: 114px;
+	}
+
+	.mg-tabs {
+		gap: 1.2em;
+	}
+
+	.mg-icon {
+		width: 24px;
+		height: 24px;
+	}
+
+	.mg-icon svg {
+		width: 14px;
+		height: 14px;
+	}
+
+	.mg-tab {
+		max-width: 150px;
+	}
+}
+
+/* ---------- 动效 ----------
+
+   只给"整块内容换掉"的场合加过渡: 切顶栏、换排序、折叠展开。时长压在
+   140ms, 快到不会觉得在等, 但足够让画面不是硬切。搜索过滤和滚动追加
+   不加, 那两个每敲一个字就闪一次, 会晕。
+
+   曲线沿用 --mg-ease: 起步快, 收尾慢, 和系统里其它动效同一套手感。 */
+
+.mg-list.is-enter {
+	animation: mg-fade-in 140ms var(--mg-ease);
+}
+
+.mg-menu {
+	animation: mg-pop 140ms var(--mg-ease);
+	transform-origin: top left;
+}
+
+.mg-icon.is-swap {
+	animation: mg-swap 180ms var(--mg-ease);
+}
+
+@keyframes mg-fade-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes mg-pop {
+	from {
+		opacity: 0;
+		transform: scale(0.96);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
+@keyframes mg-swap {
+	0% {
+		transform: scale(0.84);
+		opacity: 0.35;
+	}
+	60% {
+		transform: scale(1.08);
+		opacity: 1;
+	}
+	100% {
+		transform: scale(1);
+		opacity: 1;
+	}
+}
+
+/* 设置里关掉动画时, 整块视图的过渡和动画一起停. */
+.mg-view.is-static,
+.mg-view.is-static * {
+	animation: none !important;
+	transition: none !important;
+}
+
+/* 只有一条关闭通道: 设置里的开关。原先还写了一条 prefers-reduced-motion
+   的无条件关闭, 结果系统报 reduce 时开关就成了摆设 —— 用户点开也看不到,
+   还以为功能没做。系统偏好只用来定首次安装时的默认值, 之后以开关为准。 */
+
+/* ---------- 支持作者 ----------
+
+   二维码必须落在白底上才扫得出来, 所以这里不跟随主题背景, 图片自己带底. */
+
+.mg-support {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 4px 0 16px;
+}
+
+.mg-support-code {
+	width: 176px;
+	height: 176px;
+	border-radius: 10px;
+	object-fit: contain;
+}
