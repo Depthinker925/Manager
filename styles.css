@@ -14,6 +14,10 @@ body {
 	--mg-scroll: color-mix(in srgb, var(--text-faint) 30%, transparent);
 	--mg-actions: 122px;
 	--mg-dur: 130ms;
+	--mg-dur-fast: 90ms;
+	--mg-anim: 140ms;
+	--mg-anim-slow: 180ms;
+	--mg-anim-long: 220ms;
 	--mg-ease: cubic-bezier(0.2, 0.7, 0.3, 1);
 }
 
@@ -68,12 +72,6 @@ body.mg-booting-main .workspace-split.mod-root {
 	visibility: hidden;
 }
 
-/* 收起侧栏时按住过渡，否则收起这个动作本身就是那一下闪。 */
-.mg-no-transition,
-.mg-no-transition * {
-	transition: none !important;
-}
-
 .mg-setting-textarea {
 	width: 100%;
 	min-height: 88px;
@@ -115,11 +113,23 @@ body.mg-booting-main .workspace-split.mod-root {
 	border-bottom: 0.5px solid var(--mg-hair);
 }
 
-/* 溢出的那一侧淡出去. 用 mask 让内容自己变透明, 而不是盖一层渐变:
-   盖层只能遮住它覆盖的那一截, 再往左的字还是硬的. */
-.mg-nav.is-overflow .mg-tabs {
-	-webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), rgba(0, 0, 0, 0));
-	mask-image: linear-gradient(to right, #000 calc(100% - 40px), rgba(0, 0, 0, 0));
+/* 溢出的那一侧淡出去. 用盖层不用 mask: mask 在旧版 Obsidian 里只有部分
+   支持, 盖层是纯背景色渐变, 哪个版本都画得出来. */
+.mg-nav::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 1px;
+	right: var(--mg-actions);
+	width: 40px;
+	background: linear-gradient(to right, rgba(0, 0, 0, 0), var(--background-primary));
+	pointer-events: none;
+	opacity: 0;
+	transition: opacity var(--mg-dur) var(--mg-ease);
+}
+
+.mg-nav.is-overflow::after {
+	opacity: 1;
 }
 
 .mg-tabs {
@@ -279,7 +289,7 @@ body.mg-booting-main .workspace-split.mod-root {
 	opacity: 0;
 	pointer-events: none;
 	background: var(--background-primary);
-	transition: width 220ms cubic-bezier(0.4, 0, 1, 1), opacity 90ms linear;
+	transition: width var(--mg-anim-long) cubic-bezier(0.4, 0, 1, 1), opacity var(--mg-dur-fast) linear;
 }
 
 .mg-search.is-open {
@@ -334,7 +344,6 @@ body.mg-booting-main .workspace-split.mod-root {
 	line-height: 22px;
 	color: var(--text-faint);
 	white-space: nowrap;
-	overflow: hidden;
 	text-overflow: ellipsis;
 	transition: height var(--mg-dur) var(--mg-ease);
 }
@@ -701,16 +710,20 @@ body.mg-booting-main .workspace-split.mod-root {
    曲线沿用 --mg-ease: 起步快, 收尾慢, 和系统里其它动效同一套手感。 */
 
 .mg-list.is-enter {
-	animation: mg-fade-in 140ms var(--mg-ease);
+	animation: mg-fade-in var(--mg-anim) var(--mg-ease);
 }
 
 .mg-menu {
-	animation: mg-pop 140ms var(--mg-ease);
 	transform-origin: top left;
 }
 
+/* 菜单挂在 body 上, 拿不到 .mg-view 里的变量, 所以由脚本决定加不加这个类. */
+.mg-menu.is-animated {
+	animation: mg-pop var(--mg-anim) var(--mg-ease);
+}
+
 .mg-icon.is-swap {
-	animation: mg-swap 180ms var(--mg-ease);
+	animation: mg-swap var(--mg-anim-slow) var(--mg-ease);
 }
 
 @keyframes mg-fade-in {
@@ -748,11 +761,14 @@ body.mg-booting-main .workspace-split.mod-root {
 	}
 }
 
-/* 设置里关掉动画时, 整块视图的过渡和动画一起停. */
-.mg-view.is-static,
-.mg-view.is-static * {
-	animation: none !important;
-	transition: none !important;
+/* 设置里关掉动画时, 把时长变量归零就够了: 所有过渡和动画都读这几个值,
+   归零等于瞬间完成, 既不用加权重, 也不会压掉以后新加的规则. */
+.mg-view.is-static {
+	--mg-dur: 0ms;
+	--mg-dur-fast: 0ms;
+	--mg-anim: 0ms;
+	--mg-anim-slow: 0ms;
+	--mg-anim-long: 0ms;
 }
 
 /* 只有一条关闭通道: 设置里的开关。原先还写了一条 prefers-reduced-motion

@@ -1640,6 +1640,7 @@ MgView.prototype.onPlusClick = function (event) {
 MgView.prototype.openCreateMenu = function (left, top) {
 	this.closeCreateMenu();
 	const panel = mgEl("div", "mg-menu");
+	if (this.animationsOn()) panel.classList.add("is-animated");
 	panel.style.left = left + "px";
 	panel.style.top = top + "px";
 
@@ -2313,19 +2314,15 @@ class ManagerPlugin extends Plugin {
 		const split = this.app.workspace.leftSplit;
 		if (!split || split.collapsed) return;
 		const el = split.containerEl;
-		if (instant && el) {
-			if (el.classList) el.classList.add("mg-no-transition");
-			if (el.style) el.style.transition = "none";
-		}
+		if (instant && el && el.style) el.style.transition = "none";
 		try {
 			split.collapse();
 		} catch (error) {
 			console.error("Manager: could not collapse the left sidebar", error);
 		}
-		if (instant && el) {
+		if (instant && el && el.style) {
 			setTimeout(() => {
-				if (el.classList) el.classList.remove("mg-no-transition");
-				if (el.style) el.style.transition = "";
+				el.style.transition = "";
 			}, 600);
 		}
 	}

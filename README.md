@@ -144,6 +144,13 @@ node test/bench.cjs     timing at ten thousand files
 
 ## Version
 
+1.0.1
+
+- Manifest description now ends with a full stop
+- The top bar fade no longer depends on CSS masks, which older builds only partly support
+- Removed a duplicated overflow declaration on the status line
+- Removed every `!important`; the animation switch now zeroes the duration variables instead
+
 1.0.0
 
 - Top bar: Recent and All as icons, locations as text, two groups, horizontally scrollable
