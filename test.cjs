@@ -78,6 +78,62 @@ eq("mgBuildRows 笔记条数", built.rows.length, 2);
 eq("mgBuildRows 按名称排", built.rows.map((row) => row.entry.title), ["a", "b"]);
 eq("mgBuildRows 报了总数", built.total, 2);
 
+/* ---------- 过滤 ---------- */
+
+const today = Date.now();
+const big = 20 * 1048576;
+const pdf = { path: "Life/b.pdf", title: "b.pdf", name: "b.pdf", parent: "Life", ext: "pdf", size: big, mtime: today };
+
+eq("解析扩展名", core.mgParseFilter(".pdf").exts, ["pdf"]);
+eq("解析多个扩展名", core.mgParseFilter(".pdf .png").exts, ["pdf", "png"]);
+eq("解析体积下限", core.mgParseFilter(">10mb").minSize, 10 * 1048576);
+eq("解析体积上限", core.mgParseFilter("<500kb").maxSize, 500 * 1024);
+eq("解析今天", core.mgParseFilter("today").from > 0, true);
+eq("解析空文件夹", core.mgParseFilter("empty").empty, true);
+eq("年月转区间", core.mgParseFilter("2026-11").to > core.mgParseFilter("2026-11").from, true);
+eq("剩下的词当名字", core.mgParseFilter("报告 .pdf").terms, ["报告"]);
+
+eq("扩展名匹配", core.mgMatchFilter(pdf, core.mgParseFilter(".pdf")), true);
+eq("扩展名不匹配", core.mgMatchFilter(pdf, core.mgParseFilter(".png")), false);
+eq("体积达标", core.mgMatchFilter(pdf, core.mgParseFilter(">10mb")), true);
+eq("体积不达标", core.mgMatchFilter(pdf, core.mgParseFilter(">100mb")), false);
+eq("时间达标", core.mgMatchFilter(pdf, core.mgParseFilter("today")), true);
+eq("名字不匹配", core.mgMatchFilter(pdf, core.mgParseFilter("zzz")), false);
+eq("空文件夹条件排掉文件", core.mgMatchFilter(pdf, core.mgParseFilter("empty")), false);
+
+const mixed = {
+	entries: [pdf, { path: "Life/a.md", title: "a", parent: "Life", ext: "md", size: 10, mtime: 10 }],
+	notesIn: () => mixed.entries,
+	childFolders: () => [],
+	rootFolders: () => [],
+	recent: () => mixed.entries,
+	countIn: () => 2
+};
+const onlyPdf = core.mgBuildRows({
+	category: "all",
+	sortMode: "name-asc",
+	index: mixed,
+	noteOrder: {},
+	folderOrder: {},
+	collapsed: [],
+	limit: 50,
+	filter: ".pdf"
+});
+eq("行构建按扩展名收窄", onlyPdf.rows.length, 1);
+eq("留下的是 pdf", onlyPdf.rows[0].entry.ext, "pdf");
+
+const allRows = core.mgBuildRows({
+	category: "all",
+	sortMode: "name-asc",
+	index: mixed,
+	noteOrder: {},
+	folderOrder: {},
+	collapsed: [],
+	limit: 50,
+	filter: ""
+});
+eq("空条件不筛", allRows.rows.length, 2);
+
 console.log(pass + " passed, " + fails.length + " failed");
 if (fails.length) {
 	for (const line of fails) console.log("FAIL " + line);

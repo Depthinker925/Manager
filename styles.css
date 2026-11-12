@@ -12,7 +12,7 @@ body {
 	--mg-fill: var(--background-modifier-hover, rgba(128, 128, 128, 0.1));
 	--mg-outline: color-mix(in srgb, var(--text-muted) 45%, transparent);
 	--mg-scroll: color-mix(in srgb, var(--text-faint) 30%, transparent);
-	--mg-actions: 122px;
+	--mg-actions: 150px;
 	--mg-dur: 130ms;
 	--mg-dur-fast: 90ms;
 	--mg-anim: 140ms;
@@ -261,8 +261,10 @@ body.mg-booting-main .workspace-split.mod-root {
 	color: var(--text-normal);
 }
 
+/* 点亮态用主题强调色. 早先是白色, 在深色主题下和普通图标的灰只差一档,
+   看不出这个按钮已经按下去了. */
 .mg-icon.is-on {
-	color: var(--text-normal);
+	color: var(--text-accent);
 }
 
 .mg-icon svg {
@@ -679,7 +681,7 @@ body.mg-booting-main .workspace-split.mod-root {
 
 @container (max-width: 340px) {
 	.mg-nav {
-		--mg-actions: 114px;
+		--mg-actions: 140px;
 	}
 
 	.mg-tabs {
@@ -792,4 +794,24 @@ body.mg-booting-main .workspace-split.mod-root {
 	height: 176px;
 	border-radius: 10px;
 	object-fit: contain;
+}
+
+/* 列表自己拿焦点是为了接键盘, 那圈默认的浏览器焦点环不要: 焦点落在哪一行
+   由下面的 .is-focus 表达, 两个圈一起出现会看不清. */
+.mg-list:focus,
+.mg-list:focus-visible {
+	outline: none;
+}
+
+/* 键盘焦点. 用 outline 不用 box-shadow: 它不占布局, 内缩一格就贴着行边,
+   行与行之间不会因为多出一圈而跳. */
+.mg-note.is-focus,
+.mg-folder.is-focus {
+	outline: 1px solid var(--mg-outline);
+	outline-offset: -1px;
+	border-radius: 6px;
+}
+
+.mg-note.is-checked {
+	background: var(--mg-fill);
 }

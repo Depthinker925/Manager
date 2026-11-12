@@ -5,7 +5,7 @@ A file manager for your vault: sort, search and reorganise notes, PDFs, images a
 Supported languages: English, 简体中文, 繁體中文, 日本語, 한국어, Deutsch, Français, Español
 
 ![Note Manager showing a vault with many folders](assets/screenshot-1.png)
-![Note Manager showing a vault with Baseline Theme](assets/screenshot-2.png)
+
 ---
 
 ## What it does
@@ -86,6 +86,39 @@ All of it can be turned off in settings.
 
 ---
 
+## Keyboard
+
+The last icon on the right switches keyboard mode on and off.
+
+Off, which is the default, a single click opens a file — what a file list has always done. On, a single click only moves the focus ring and a double click opens. That is the mode to use when you are rearranging rather than reading, and it is what makes the keys below usable without hunting for a click target first.
+
+The list also picks up focus whenever you click a row. From there:
+
+- `Up` `Down` or `k` `j` — move the focus ring
+- `Home` / `End` — first or last row
+- `PgUp` / `PgDn` — a screen at a time
+- `Enter` — open a file, or collapse and expand a folder
+- `/` — jump into the filter box from anywhere in the view
+- `Esc` — clear the filter, or leave create and reorder modes
+- `Ctrl+A` — mark every visible row
+
+## Filter
+
+The search box takes more than words. Conditions narrow the same table in place: you can still drag rows, create files and rename while it is filtered.
+
+| Token | Meaning |
+| --- | --- |
+| `.pdf` | by extension, several allowed |
+| `>10mb` `<500kb` | by size, in `b` `kb` `mb` `gb` |
+| `today` `week` `month` | modified inside that window |
+| `2026-11` `2026-11-11` | a month, or a day |
+| `empty` | folders with nothing inside |
+| anything else | matched against the name |
+
+In the All view, `.pdf today` lists every PDF modified today across the vault. Conditions with an extension, size or date flatten the result and hide folder headings, because the point of those queries is the files themselves.
+
+---
+
 ## Supported file types
 
 - Notes `.md`
@@ -131,7 +164,23 @@ node test.cjs
 `test.cjs` swaps `require("obsidian")` for a stub, loads `main.js` unchanged and exercises the pure functions exported on `__core`: path handling, name collisions, sort comparators, row building. No framework, no fixtures, one file.
 
 ---
+
+## Screenshots
+
+![A vault with many folders](assets/screenshot-1.png)
+
+![A smaller vault](assets/screenshot-2.png)
+
+---
+
 ## Version
+
+1.0.3
+
+- Keyboard mode toggle on the far right: single click selects, double click opens
+- Keyboard navigation: arrows and `j` / `k`, Home and End, PgUp and PgDn, Enter, `/` to filter, Esc to leave, Ctrl+A to mark
+- Filter tokens in the search box: `.pdf`, `>10mb`, `today`, `week`, `month`, `2026-11`, `empty`, mixed freely with names
+- Fixed: the status line said zero results while the list still had rows
 
 1.0.2
 

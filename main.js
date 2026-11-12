@@ -31,6 +31,7 @@ const MG_DEFAULT = {
 	showSettingsIcon: true,
 	showEmptyFolders: false,
 	animations: true,
+	keyboardMode: false,
 	homePage: false,
 	collapseSidebar: true,
 	blockedFolders: ""
@@ -145,6 +146,117 @@ function mgNumber(value) {
 /* 屏蔽名单是一行一个路径。写成 Life 就屏蔽 Life 和它下面所有子目录,
    写成 Life/日记 只屏蔽那一棵。首尾斜杠和反斜杠都归一化掉,
    否则从 Windows 复制来的路径永远匹配不上 vault 里的正斜杠路径。 */
+/* ---------- 过滤 ----------
+
+   搜索框里的词分两类: 带前缀的是条件, 剩下的才是名字. 条件全部在纯函数里
+   解析, 视图只管把结果画出来, 所以同一套语法在标题搜索和全文搜索上都能用.
+
+   .pdf     按扩展名, 可以写多个
+   >10mb    按体积, 也支持 <500kb 和 b / kb / mb / gb
+   today    今天改过; week 七天; month 三十天; 2026-11 或 2026-11-11
+   empty    只看空文件夹
+   其余     按名字, 多个词是并且关系 */
+
+const MG_SIZE_UNITS = { b: 1, kb: 1024, mb: 1048576, gb: 1073741824 };
+
+function mgStartOfDay(time) {
+	const date = new Date(time);
+	date.setHours(0, 0, 0, 0);
+	return date.getTime();
+}
+
+function mgParseFilter(text) {
+	const out = { terms: [], exts: [], minSize: 0, maxSize: 0, from: 0, to: 0, empty: false };
+	const raw = String(text || "").trim().toLowerCase();
+	if (!raw) return out;
+	const now = Date.now();
+	const day = 86400000;
+
+	for (const token of raw.split(/\s+/)) {
+		if (!token) continue;
+
+		if (/^\.[a-z0-9]+$/.test(token)) {
+			out.exts.push(token.slice(1));
+			continue;
+		}
+
+		const size = /^([<>])(\d+(?:\.\d+)?)(b|kb|mb|gb)$/.exec(token);
+		if (size) {
+			const bytes = Number(size[2]) * MG_SIZE_UNITS[size[3]];
+			if (size[1] === ">") out.minSize = bytes;
+			else out.maxSize = bytes;
+			continue;
+		}
+
+		if (token === "today") {
+			out.from = mgStartOfDay(now);
+			continue;
+		}
+		if (token === "week") {
+			out.from = mgStartOfDay(now) - 6 * day;
+			continue;
+		}
+		if (token === "month") {
+			out.from = mgStartOfDay(now) - 29 * day;
+			continue;
+		}
+		if (token === "empty") {
+			out.empty = true;
+			continue;
+		}
+
+		const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(token);
+		if (ymd) {
+			out.from = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3])).getTime();
+			out.to = out.from + day;
+			continue;
+		}
+
+		const ym = /^(\d{4})-(\d{2})$/.exec(token);
+		if (ym) {
+			out.from = new Date(Number(ym[1]), Number(ym[2]) - 1, 1).getTime();
+			out.to = new Date(Number(ym[1]), Number(ym[2]), 1).getTime();
+			continue;
+		}
+
+		out.terms.push(token);
+	}
+
+	return out;
+}
+
+/* 只按名字比, 给文件夹标题用. */
+function mgMatchTerms(name, filter) {
+	const hay = String(name || "").toLowerCase();
+	for (const term of filter.terms) {
+		if (hay.indexOf(term) < 0) return false;
+	}
+	return true;
+}
+
+/* 文件能不能留在这张表上. */
+function mgMatchFilter(entry, filter) {
+	if (!filter) return true;
+	if (filter.empty) return false;
+	if (filter.exts.length > 0 && filter.exts.indexOf(String(entry.ext || "").toLowerCase()) < 0) return false;
+	if (filter.minSize > 0 && mgNumber(entry.size) < filter.minSize) return false;
+	if (filter.maxSize > 0 && mgNumber(entry.size) > filter.maxSize) return false;
+	if (filter.from > 0 && mgNumber(entry.mtime) < filter.from) return false;
+	if (filter.to > 0 && mgNumber(entry.mtime) >= filter.to) return false;
+	return mgMatchTerms(entry.title || entry.name, filter);
+}
+
+/* 带了扩展名 / 体积 / 时间条件时, 结果按文件平铺, 文件夹标题让位. */
+function mgFilterIsStructured(filter) {
+	return (
+		filter.exts.length > 0 ||
+		filter.minSize > 0 ||
+		filter.maxSize > 0 ||
+		filter.from > 0 ||
+		filter.to > 0
+	);
+}
+
 function mgBlockedList(text) {
 	const out = [];
 	const seen = new Set();
@@ -219,6 +331,7 @@ const MG_LANGS = {
 		setHomePage: "设为首页",
 		setAnimations: "界面动画",
 		setCollapse: "开启时收起左侧边栏",
+		kbMode: "键盘模式",
 		setSupport: "支持作者 - 微信扫码",
 	},
 
@@ -266,6 +379,7 @@ const MG_LANGS = {
 		setHomePage: "設為首頁",
 		setAnimations: "介面動畫",
 		setCollapse: "開啟時收起左側邊欄",
+		kbMode: "鍵盤模式",
 		setSupport: "支持作者 - 微信掃碼",
 	},
 
@@ -313,6 +427,7 @@ const MG_LANGS = {
 		setHomePage: "Open on startup",
 		setAnimations: "Interface animations",
 		setCollapse: "Collapse left sidebar",
+		kbMode: "Keyboard mode",
 		setSupport: "Support the author - WeChat QR",
 	},
 
@@ -360,6 +475,7 @@ const MG_LANGS = {
 		setHomePage: "起動時に開く",
 		setAnimations: "UI アニメーション",
 		setCollapse: "左サイドバーを畳む",
+		kbMode: "キーボード操作",
 		setSupport: "作者を支援 - WeChat QR",
 	},
 
@@ -407,6 +523,7 @@ const MG_LANGS = {
 		setHomePage: "시작 시 열기",
 		setAnimations: "인터페이스 애니메이션",
 		setCollapse: "왼쪽 사이드바 접기",
+		kbMode: "키보드 모드",
 		setSupport: "작가 후원 - 위챗 QR",
 	},
 
@@ -454,6 +571,7 @@ const MG_LANGS = {
 		setHomePage: "Beim Start öffnen",
 		setAnimations: "Oberflächenanimationen",
 		setCollapse: "Linke Seitenleiste einklappen",
+		kbMode: "Tastaturmodus",
 		setSupport: "Autor unterstützen - WeChat-QR",
 	},
 
@@ -501,6 +619,7 @@ const MG_LANGS = {
 		setHomePage: "Ouvrir au démarrage",
 		setAnimations: "Animations de l'interface",
 		setCollapse: "Replier la barre latérale",
+		kbMode: "Mode clavier",
 		setSupport: "Soutenir l'auteur - QR WeChat",
 	},
 
@@ -548,6 +667,7 @@ const MG_LANGS = {
 		setHomePage: "Abrir al iniciar",
 		setAnimations: "Animaciones de la interfaz",
 		setCollapse: "Plegar barra lateral",
+		kbMode: "Modo teclado",
 		setSupport: "Apoyar al autor - QR de WeChat",
 	}
 };
@@ -753,12 +873,14 @@ function mgBuildRows(input) {
 	const folderOrder = input.folderOrder || {};
 	const cap = Math.max(1, mgNumber(input.limit) || 120);
 	const showEmpty = input.showEmpty === true;
+	const filter = mgParseFilter(input.filter);
 	const rows = [];
 	let shown = 0;
 	let total = 0;
 	let cut = false;
 
 	const pushNote = (entry, level, snippet) => {
+		if (!mgMatchFilter(entry, filter)) return;
 		total += 1;
 		if (shown >= cap) {
 			cut = true;
@@ -805,10 +927,35 @@ function mgBuildRows(input) {
 		const kids = mgSortFolders(index.childFolders(dir), mode, folderOrder[dir] || []);
 		for (const kid of kids) {
 			const count = countOf(kid.path);
+			const next = level + 1;
+
+			/* 只看空文件夹: 有内容的一律跳过, 也不再往下走. */
+			if (filter.empty) {
+				if (count > 0) continue;
+				rows.push({
+					type: "folder",
+					path: kid.path,
+					name: kid.name,
+					level: mgClampLevel(next),
+					count,
+					open: false
+				});
+				continue;
+			}
+
+			/* 带了扩展名 / 体积 / 时间条件时, 结果按文件平铺, 文件夹标题让位,
+			   但子目录还是要走一遍, 不然只在第一层里找. */
+			if (mgFilterIsStructured(filter)) {
+				walk(kid.path, 0);
+				continue;
+			}
+
+			if (!mgMatchTerms(kid.name, filter)) continue;
+
 			/* 一棵子树里一篇笔记都没有, 标题就不出现. 只有创建或调整模式下
 			   才放出来, 因为那时候用户要能点到它. */
 			if (count === 0 && !showEmpty) continue;
-			const next = level + 1;
+
 			rows.push({
 				type: "folder",
 				path: kid.path,
@@ -863,6 +1010,8 @@ class MgView extends ItemView {
 		this.index = new MgIndex(plugin.app);
 		this.category = "root";
 		this.query = "";
+		this.cursor = -1;
+		this.selected = [];
 		this.scope = plugin.data.searchScope || "title";
 		this.collapsed = new Set(plugin.data.collapsed || []);
 		this.sortMode = plugin.data.sortMode || "name-asc";
@@ -938,6 +1087,7 @@ class MgView extends ItemView {
 		mgClear(root);
 		root.classList.add("mg-view");
 		root.classList.toggle("is-static", this.plugin.data.animations === false);
+		this.keyboardMode = this.plugin.data.keyboardMode === true;
 
 		const page = mgEl("div", "mg-page");
 		root.appendChild(page);
@@ -970,10 +1120,12 @@ class MgView extends ItemView {
 		this.plusBtn = mgIconButton("mg-plus-btn", "plus", MG_TEXT.newNote);
 		this.editBtn = mgIconButton("mg-edit-btn", "pencil", MG_TEXT.editOrder);
 		this.sortBtn = mgIconButton("mg-sort-btn", "arrow-up-narrow-wide", MG_TEXT.sortTitle);
+		this.kbBtn = mgIconButton("mg-kb-btn", "keyboard", MG_TEXT.kbMode);
 		this.actionsEl.appendChild(this.searchBtn);
 		this.actionsEl.appendChild(this.plusBtn);
 		this.actionsEl.appendChild(this.editBtn);
 		this.actionsEl.appendChild(this.sortBtn);
+		this.actionsEl.appendChild(this.kbBtn);
 		this.syncSortIcon();
 		this.bindActions();
 
@@ -983,6 +1135,7 @@ class MgView extends ItemView {
 		page.appendChild(this.statusEl);
 
 		this.listEl = mgEl("div", "mg-list");
+		this.listEl.tabIndex = 0;
 		page.appendChild(this.listEl);
 		this.bindList();
 
@@ -1015,6 +1168,8 @@ class MgView extends ItemView {
 		this.editBtn.addEventListener("click", () => this.onEditClick());
 
 		this.sortBtn.addEventListener("click", (event) => this.openSortMenu(event));
+		this.kbBtn.addEventListener("click", () => this.onKeyboardClick());
+		this.kbBtn.addEventListener("contextmenu", (event) => event.preventDefault());
 
 		const stop = (event) => event.stopPropagation();
 		this.searchEl.addEventListener("click", stop);
@@ -1068,8 +1223,17 @@ class MgView extends ItemView {
 		});
 	}
 
+	/* 在输入框里打字时, j / k / Home 这些都是文字, 不能当导航用. */
+	isTyping(node) {
+		if (!node || !node.tagName) return false;
+		const tag = node.tagName.toLowerCase();
+		return tag === "input" || tag === "textarea" || node.isContentEditable === true;
+	}
+
 	bindList() {
 		this.listEl.addEventListener("click", (event) => this.onListClick(event));
+		this.listEl.addEventListener("keydown", (event) => this.onListKey(event));
+		this.listEl.addEventListener("dblclick", (event) => this.onListDoubleClick(event));
 		this.listEl.addEventListener("contextmenu", (event) => this.onListMenu(event));
 		this.listEl.addEventListener("scroll", () => {
 			const node = this.listEl;
@@ -1200,7 +1364,15 @@ class MgView extends ItemView {
 		}
 		list.appendChild(fragment);
 		this.syncStatus(result.shown, result.total);
+		this.collectRows();
 		if (animate) this.animateList();
+	}
+
+	/* 键盘只在看得见的行之间走, 省略号行和空状态不参与. */
+	collectRows() {
+		this.rowNodes = this.listEl ? [...this.listEl.querySelectorAll(".mg-note, .mg-folder")] : [];
+		if (this.cursor >= this.rowNodes.length) this.cursor = this.rowNodes.length - 1;
+		if (this.cursor >= 0) this.paintCursor();
 	}
 
 	/* 只给"整块内容换掉"的场合用: 切顶栏、换排序、折叠展开. 搜索每敲一个
@@ -1240,8 +1412,10 @@ class MgView extends ItemView {
 			});
 		}
 
-		const query = this.query.trim();
-		const titleHits = this.index.searchTitle(query);
+		const filter = mgParseFilter(this.query);
+		const words = filter.terms.join(" ");
+		const pool = words ? this.index.searchTitle(words) : this.index.entries.slice();
+		const titleHits = pool.filter((entry) => mgMatchFilter(entry, filter));
 		const rows = [];
 		let total = 0;
 
@@ -1250,6 +1424,7 @@ class MgView extends ItemView {
 			const merged = titleHits.map((entry) => ({ entry, snippet: "" }));
 			for (const entry of this.index.entries) {
 				if (seen.has(entry.path)) continue;
+				if (!mgMatchFilter(entry, filter)) continue;
 				const snippet = this.fullHits.get(entry.path);
 				if (snippet) merged.push({ entry, snippet });
 			}
@@ -1413,6 +1588,8 @@ class MgView extends ItemView {
 
 	clearSearch() {
 		this.query = "";
+		this.cursor = -1;
+		this.selected = [];
 		this.inputEl.value = "";
 		this.fullHits.clear();
 		this.searchEl.classList.remove("is-open");
@@ -1490,6 +1667,29 @@ MgView.prototype.popIcon = function (button, changed) {
 	button.classList.add("is-swap");
 };
 
+/* 键盘模式: 单击只把焦点挪过去, 双击才打开. 默认单击直接开, 那是文件
+   浏览器一直以来的手感, 但拿它来整理时手指容易误触. */
+MgView.prototype.onKeyboardClick = function () {
+	this.keyboardMode = this.keyboardMode !== true;
+	this.plugin.data.keyboardMode = this.keyboardMode;
+	void this.plugin.saveData(this.plugin.data);
+	this.updateModeIcons();
+	if (this.keyboardMode && this.listEl && typeof this.listEl.focus === "function") {
+		try {
+			this.listEl.focus({ preventScroll: true });
+		} catch (error) {
+			this.listEl.focus();
+		}
+	}
+};
+
+MgView.prototype.onListDoubleClick = function (event) {
+	if (!this.keyboardMode) return;
+	const node = event.target && event.target.closest ? event.target.closest(".mg-note") : null;
+	if (!node) return;
+	this.openNote(node.dataset.path, event);
+};
+
 MgView.prototype.updateModeIcons = function () {
 	const creating = Boolean(this.creating);
 	const editing = Boolean(this.editing);
@@ -1501,6 +1701,10 @@ MgView.prototype.updateModeIcons = function () {
 		this.plusBtn.setAttribute("aria-label", creating ? MG_TEXT.created : MG_TEXT.newNote);
 		this.plusBtn.dataset.mode = now;
 		this.popIcon(this.plusBtn, was !== now);
+	}
+	if (this.kbBtn) {
+		this.kbBtn.classList.toggle("is-on", this.keyboardMode === true);
+		this.kbBtn.setAttribute("aria-pressed", this.keyboardMode === true ? "true" : "false");
 	}
 	if (this.editBtn) {
 		const was = this.editBtn.dataset.mode || "off";
@@ -1585,6 +1789,11 @@ MgView.prototype.onListClick = function (event) {
 	if (kind === "note") {
 		if (this.creating) return;
 		if (this.editing === "order") return;
+		if (this.keyboardMode) {
+			const index = (this.rowNodes || []).indexOf(node);
+			if (index >= 0) this.focusRow(index);
+			return;
+		}
 		this.openNote(path, event);
 	}
 };
@@ -2031,6 +2240,66 @@ MgView.prototype.moveInto = async function (sourcePath, destDir) {
 	}
 };
 
+/* ---------- 键盘 ----------
+
+   列表自己拿焦点, 上下键移动焦点环, Enter 打开. 视图里没有多选的真实
+   用途, Ctrl+A 先把可见行标出来, 留给以后整批移动. */
+
+MgView.prototype.onListKey = function (event) {
+	const rows = this.rowNodes || [];
+	if (rows.length === 0) return;
+	const page = Math.max(1, Math.floor((this.listEl.clientHeight || 400) / 34));
+	let next = this.cursor;
+	const key = event.key;
+
+	if (key === "ArrowDown" || key === "j") next += 1;
+	else if (key === "ArrowUp" || key === "k") next -= 1;
+	else if (key === "Home") next = 0;
+	else if (key === "End") next = rows.length - 1;
+	else if (key === "PageDown") next += page;
+	else if (key === "PageUp") next -= page;
+	else if (key === "Enter") {
+		event.preventDefault();
+		this.activateRow(rows[Math.max(0, this.cursor)]);
+		return;
+	} else if ((key === "a" || key === "A") && (event.ctrlKey || event.metaKey)) {
+		event.preventDefault();
+		this.selectVisible();
+		return;
+	} else return;
+
+	event.preventDefault();
+	this.focusRow(Math.max(0, Math.min(rows.length - 1, next)));
+};
+
+MgView.prototype.focusRow = function (index) {
+	const rows = this.rowNodes || [];
+	if (rows.length === 0) return;
+	this.cursor = index;
+	this.paintCursor();
+	const node = rows[index];
+	if (node && typeof node.scrollIntoView === "function") node.scrollIntoView({ block: "nearest" });
+};
+
+MgView.prototype.paintCursor = function () {
+	const rows = this.rowNodes || [];
+	for (let i = 0; i < rows.length; i += 1) rows[i].classList.toggle("is-focus", i === this.cursor);
+};
+
+MgView.prototype.activateRow = function (node) {
+	if (!node || !node.dataset) return;
+	const path = node.dataset.path;
+	if (!path) return;
+	if (node.classList.contains("mg-folder")) this.toggleCollapse(path);
+	else this.openNote(path);
+};
+
+MgView.prototype.selectVisible = function () {
+	const rows = this.rowNodes || [];
+	this.selected = rows.map((node) => node.dataset.path).filter(Boolean);
+	for (const node of rows) node.classList.add("is-checked");
+};
+
 /* ===== 40-search.js ===== */
 "use strict";
 
@@ -2044,10 +2313,11 @@ MgView.prototype.scheduleFullScan = function () {
 	if (this.scanTimer) window.clearTimeout(this.scanTimer);
 	this.scanTimer = 0;
 	const needle = this.query.trim();
+	/* 标题范围走的是同步匹配, 结果数 renderList 已经写好了. 这里再调一次
+	   syncStatus(0, 0) 会把它盖成"0 条结果", 列表明明有内容却报零. */
 	if (this.scope !== "full" || !needle) {
 		this.searching = false;
 		this.searchScanned = 0;
-		this.syncStatus(0, 0);
 		return;
 	}
 	this.scanTimer = window.setTimeout(() => this.startFullSearch(needle), 240);
@@ -2457,6 +2727,10 @@ module.exports.__core = {
 	mgRelative,
 	mgNumber,
 	mgBlockedList,
+	mgParseFilter,
+	mgMatchFilter,
+	mgMatchTerms,
+	mgFilterIsStructured,
 	mgUnder,
 	mgSortNotes,
 	mgSortFolders,
