@@ -108,6 +108,21 @@ The list also picks up focus whenever you click a row. From there:
 - `Esc` — clear the filter, or leave create and reorder modes
 - `Ctrl+A` — mark every visible row
 
+## Selecting several
+
+- `Ctrl` (or `Cmd`) click adds or removes one row
+- `Shift` click selects the run between the anchor and the row you clicked
+- `Ctrl+A` takes everything currently visible
+- Drag any selected row onto a folder header to move the whole set at once
+- `Delete` asks once, then removes them all
+- `Ctrl+Shift+R` renames them in order: `Note-001`, `Note-002`, and so on, keeping each extension
+
+Folder headers are not selectable — clicking one still collapses it, which is what that click means everywhere else in the app.
+
+The count sits in the status line while a selection exists.
+
+---
+
 ## Note structure
 
 The third icon in the ribbon opens a structure view of the whole vault: the vault name, then every folder branching out down to the leaf folders.
@@ -195,6 +210,13 @@ node test.cjs
 ---
 
 ## Version
+
+1.0.5
+
+- Ctrl and Shift selection, with the count in the status line
+- Drag a selection onto a folder to move every item
+- Delete asks once for the whole selection
+- Batch rename numbers the selection `Note-001`, `Note-002`, keeping extensions
 
 1.0.4
 

@@ -9,7 +9,7 @@
    每一节只用 const 声明一次，拼接后仍是同一个作用域。 */
 
 const obsidian = require("obsidian");
-const { Plugin, ItemView, Menu, Notice, setIcon, Setting, PluginSettingTab, getLanguage } = obsidian;
+const { Plugin, ItemView, Menu, Modal, Notice, setIcon, Setting, PluginSettingTab, getLanguage } = obsidian;
 
 const MG_VIEW_TYPE = "manager-view";
 const MG_MAP_TYPE = "manager-map";
@@ -364,6 +364,13 @@ const MG_LANGS = {
 		dComfortable: "宽松",
 		sizeDesc: "体积 大到小",
 		kbMode: "键盘模式",
+		selCount: "已选 %n 项",
+		deleteTitle: "删除 %n 项",
+		deleteConfirm: "删除后无法撤销，文件夹会连同里面的内容一起删。",
+		btnDelete: "删除",
+		btnCancel: "取消",
+		batchPrefix: "笔记",
+		batchDone: "已重命名 %n 项",
 		setSupport: "支持作者 - 微信扫码",
 	},
 
@@ -425,6 +432,13 @@ const MG_LANGS = {
 		dComfortable: "寬鬆",
 		sizeDesc: "大小 大到小",
 		kbMode: "鍵盤模式",
+		selCount: "已選 %n 項",
+		deleteTitle: "刪除 %n 項",
+		deleteConfirm: "刪除後無法復原，資料夾會連同內容一起刪除。",
+		btnDelete: "刪除",
+		btnCancel: "取消",
+		batchPrefix: "筆記",
+		batchDone: "已重新命名 %n 項",
 		setSupport: "支持作者 - 微信掃碼",
 	},
 
@@ -486,6 +500,13 @@ const MG_LANGS = {
 		dComfortable: "Comfortable",
 		sizeDesc: "Size, largest first",
 		kbMode: "Keyboard mode",
+		selCount: "%n selected",
+		deleteTitle: "Delete %n items",
+		deleteConfirm: "This cannot be undone. Folders go with everything inside.",
+		btnDelete: "Delete",
+		btnCancel: "Cancel",
+		batchPrefix: "Note",
+		batchDone: "Renamed %n items",
 		setSupport: "Support the author - WeChat QR",
 	},
 
@@ -547,6 +568,13 @@ const MG_LANGS = {
 		dComfortable: "ゆったり",
 		sizeDesc: "サイズ 大きい順",
 		kbMode: "キーボード操作",
+		selCount: "%n 件選択中",
+		deleteTitle: "%n 件を削除",
+		deleteConfirm: "元に戻せません。フォルダは中身ごと削除されます。",
+		btnDelete: "削除",
+		btnCancel: "キャンセル",
+		batchPrefix: "ノート",
+		batchDone: "%n 件の名前を変更しました",
 		setSupport: "作者を支援 - WeChat QR",
 	},
 
@@ -608,6 +636,13 @@ const MG_LANGS = {
 		dComfortable: "넉넉히",
 		sizeDesc: "용량 큰 순",
 		kbMode: "키보드 모드",
+		selCount: "%n개 선택됨",
+		deleteTitle: "%n개 삭제",
+		deleteConfirm: "되돌릴 수 없습니다. 폴더는 안의 내용까지 함께 삭제됩니다.",
+		btnDelete: "삭제",
+		btnCancel: "취소",
+		batchPrefix: "노트",
+		batchDone: "%n개 이름을 바꿨습니다",
 		setSupport: "작가 후원 - 위챗 QR",
 	},
 
@@ -669,6 +704,13 @@ const MG_LANGS = {
 		dComfortable: "Großzügig",
 		sizeDesc: "Größe, größte zuerst",
 		kbMode: "Tastaturmodus",
+		selCount: "%n ausgewählt",
+		deleteTitle: "%n Elemente löschen",
+		deleteConfirm: "Das lässt sich nicht rückgängig machen. Ordner werden mit Inhalt gelöscht.",
+		btnDelete: "Löschen",
+		btnCancel: "Abbrechen",
+		batchPrefix: "Notiz",
+		batchDone: "%n Elemente umbenannt",
 		setSupport: "Autor unterstützen - WeChat-QR",
 	},
 
@@ -730,6 +772,13 @@ const MG_LANGS = {
 		dComfortable: "Confortable",
 		sizeDesc: "Taille, décroissante",
 		kbMode: "Mode clavier",
+		selCount: "%n sélectionnés",
+		deleteTitle: "Supprimer %n éléments",
+		deleteConfirm: "Action irréversible. Les dossiers partent avec leur contenu.",
+		btnDelete: "Supprimer",
+		btnCancel: "Annuler",
+		batchPrefix: "Note",
+		batchDone: "%n éléments renommés",
 		setSupport: "Soutenir l'auteur - QR WeChat",
 	},
 
@@ -791,6 +840,13 @@ const MG_LANGS = {
 		dComfortable: "Amplia",
 		sizeDesc: "Tamaño, mayor primero",
 		kbMode: "Modo teclado",
+		selCount: "%n seleccionados",
+		deleteTitle: "Eliminar %n elementos",
+		deleteConfirm: "No se puede deshacer. Las carpetas se borran con todo su contenido.",
+		btnDelete: "Eliminar",
+		btnCancel: "Cancelar",
+		batchPrefix: "Nota",
+		batchDone: "%n elementos renombrados",
 		setSupport: "Apoyar al autor - QR de WeChat",
 	}
 };
@@ -902,6 +958,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "Просторная",
 		sizeDesc: "Размер, от большего",
 		kbMode: "Режим клавиатуры",
+		selCount: "Выбрано: %n",
+		deleteTitle: "Удалить %n объектов",
+		deleteConfirm: "Отменить нельзя. Папки удаляются вместе с содержимым.",
+		btnDelete: "Удалить",
+		btnCancel: "Отмена",
+		batchPrefix: "Заметка",
+		batchDone: "Переименовано: %n",
 		setSupport: "Поддержать автора — WeChat QR",
 	},
 	it: {
@@ -962,6 +1025,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "Ampia",
 		sizeDesc: "Dimensione, dal più grande",
 		kbMode: "Modalità tastiera",
+		selCount: "%n selezionati",
+		deleteTitle: "Elimina %n elementi",
+		deleteConfirm: "Non è reversibile. Le cartelle vengono rimosse con tutto il contenuto.",
+		btnDelete: "Elimina",
+		btnCancel: "Annulla",
+		batchPrefix: "Nota",
+		batchDone: "%n elementi rinominati",
 		setSupport: "Sostieni l'autore - QR WeChat",
 	},
 	pt: {
@@ -1022,6 +1092,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "Ampla",
 		sizeDesc: "Tamanho, maior primeiro",
 		kbMode: "Modo teclado",
+		selCount: "%n selecionados",
+		deleteTitle: "Eliminar %n itens",
+		deleteConfirm: "Não é possível anular. As pastas são removidas com todo o conteúdo.",
+		btnDelete: "Eliminar",
+		btnCancel: "Cancelar",
+		batchPrefix: "Nota",
+		batchDone: "%n itens renomeados",
 		setSupport: "Apoiar o autor - QR WeChat",
 	},
 	"pt-BR": {
@@ -1082,6 +1159,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "Ampla",
 		sizeDesc: "Tamanho, maior primeiro",
 		kbMode: "Modo teclado",
+		selCount: "%n selecionados",
+		deleteTitle: "Excluir %n itens",
+		deleteConfirm: "Não dá para desfazer. As pastas são excluídas com todo o conteúdo.",
+		btnDelete: "Excluir",
+		btnCancel: "Cancelar",
+		batchPrefix: "Nota",
+		batchDone: "%n itens renomeados",
 		setSupport: "Apoiar o autor - QR WeChat",
 	},
 	pl: {
@@ -1142,6 +1226,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "Luźna",
 		sizeDesc: "Rozmiar, od największego",
 		kbMode: "Tryb klawiatury",
+		selCount: "Wybrano %n",
+		deleteTitle: "Usuń %n elementów",
+		deleteConfirm: "Nie można cofnąć. Foldery znikają wraz z zawartością.",
+		btnDelete: "Usuń",
+		btnCancel: "Anuluj",
+		batchPrefix: "Notatka",
+		batchDone: "Zmieniono nazwy: %n",
 		setSupport: "Wesprzyj autora - QR WeChat",
 	},
 	nl: {
@@ -1202,6 +1293,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "Ruim",
 		sizeDesc: "Grootte, grootste eerst",
 		kbMode: "Toetsenbordmodus",
+		selCount: "%n geselecteerd",
+		deleteTitle: "%n items verwijderen",
+		deleteConfirm: "Dit kan niet ongedaan worden gemaakt. Mappen verdwijnen met inhoud.",
+		btnDelete: "Verwijderen",
+		btnCancel: "Annuleren",
+		batchPrefix: "Notitie",
+		batchDone: "%n items hernoemd",
 		setSupport: "Auteur steunen - WeChat-QR",
 	},
 	tr: {
@@ -1262,6 +1360,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "Ferah",
 		sizeDesc: "Boyut, en büyük önce",
 		kbMode: "Klavye modu",
+		selCount: "%n seçili",
+		deleteTitle: "%n öğeyi sil",
+		deleteConfirm: "Bu geri alınamaz. Klasörler içindekilerle birlikte silinir.",
+		btnDelete: "Sil",
+		btnCancel: "İptal",
+		batchPrefix: "Not",
+		batchDone: "%n öğe yeniden adlandırıldı",
 		setSupport: "Yazarı destekle - WeChat QR",
 	},
 	uk: {
@@ -1322,6 +1427,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "Простора",
 		sizeDesc: "Розмір, від більшого",
 		kbMode: "Режим клавіатури",
+		selCount: "Вибрано: %n",
+		deleteTitle: "Видалити %n об'єктів",
+		deleteConfirm: "Скасувати не можна. Папки видаляються разом із вмістом.",
+		btnDelete: "Видалити",
+		btnCancel: "Скасувати",
+		batchPrefix: "Нотатка",
+		batchDone: "Перейменовано: %n",
 		setSupport: "Підтримати автора - WeChat QR",
 	},
 	id: {
@@ -1382,6 +1494,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "Lega",
 		sizeDesc: "Ukuran, terbesar dulu",
 		kbMode: "Mode papan ketik",
+		selCount: "%n dipilih",
+		deleteTitle: "Hapus %n item",
+		deleteConfirm: "Tidak bisa dibatalkan. Folder ikut terhapus beserta isinya.",
+		btnDelete: "Hapus",
+		btnCancel: "Batal",
+		batchPrefix: "Catatan",
+		batchDone: "%n item diganti nama",
 		setSupport: "Dukung penulis - QR WeChat",
 	},
 	vi: {
@@ -1442,6 +1561,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "Thoáng",
 		sizeDesc: "Kích thước, lớn nhất trước",
 		kbMode: "Chế độ bàn phím",
+		selCount: "Đã chọn %n",
+		deleteTitle: "Xoá %n mục",
+		deleteConfirm: "Không thể hoàn tác. Thư mục bị xoá cùng toàn bộ nội dung.",
+		btnDelete: "Xoá",
+		btnCancel: "Huỷ",
+		batchPrefix: "Ghi chú",
+		batchDone: "Đã đổi tên %n mục",
 		setSupport: "Ủng hộ tác giả - QR WeChat",
 	},
 	sv: {
@@ -1502,6 +1628,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "Luftig",
 		sizeDesc: "Storlek, störst först",
 		kbMode: "Tangentbordsläge",
+		selCount: "%n valda",
+		deleteTitle: "Ta bort %n objekt",
+		deleteConfirm: "Går inte att ångra. Mappar tas bort med allt innehåll.",
+		btnDelete: "Ta bort",
+		btnCancel: "Avbryt",
+		batchPrefix: "Anteckning",
+		batchDone: "%n objekt omdöpta",
 		setSupport: "Stöd författaren - WeChat-QR",
 	},
 	da: {
@@ -1562,6 +1695,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "Luftig",
 		sizeDesc: "Størrelse, størst først",
 		kbMode: "Tastaturtilstand",
+		selCount: "%n valgt",
+		deleteTitle: "Slet %n elementer",
+		deleteConfirm: "Kan ikke fortrydes. Mapper slettes med alt indhold.",
+		btnDelete: "Slet",
+		btnCancel: "Annuller",
+		batchPrefix: "Note",
+		batchDone: "%n elementer omdøbt",
 		setSupport: "Støt forfatteren - WeChat-QR",
 	},
 	no: {
@@ -1622,6 +1762,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "Luftig",
 		sizeDesc: "Størrelse, størst først",
 		kbMode: "Tastaturmodus",
+		selCount: "%n valgt",
+		deleteTitle: "Slett %n elementer",
+		deleteConfirm: "Kan ikke angres. Mapper slettes med alt innhold.",
+		btnDelete: "Slett",
+		btnCancel: "Avbryt",
+		batchPrefix: "Notat",
+		batchDone: "%n elementer gitt nytt navn",
 		setSupport: "Støtt forfatteren - WeChat-QR",
 	},
 	fi: {
@@ -1682,6 +1829,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "Väljä",
 		sizeDesc: "Koko, suurin ensin",
 		kbMode: "Näppäimistötila",
+		selCount: "%n valittu",
+		deleteTitle: "Poista %n kohdetta",
+		deleteConfirm: "Ei voi kumota. Kansiot poistuvat sisältöineen.",
+		btnDelete: "Poista",
+		btnCancel: "Peruuta",
+		batchPrefix: "Muistiinpano",
+		batchDone: "%n kohdetta nimettiin uudelleen",
 		setSupport: "Tue tekijää - WeChat-QR",
 	},
 	cs: {
@@ -1742,6 +1896,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "Vzdušná",
 		sizeDesc: "Velikost, největší první",
 		kbMode: "Režim klávesnice",
+		selCount: "Vybráno: %n",
+		deleteTitle: "Smazat %n položek",
+		deleteConfirm: "Nelze vrátit zpět. Složky se smažou i s obsahem.",
+		btnDelete: "Smazat",
+		btnCancel: "Zrušit",
+		batchPrefix: "Poznámka",
+		batchDone: "Přejmenováno: %n",
 		setSupport: "Podpořit autora - WeChat QR",
 	},
 	sk: {
@@ -1802,6 +1963,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "Vzdušná",
 		sizeDesc: "Veľkosť, najväčšie prvé",
 		kbMode: "Režim klávesnice",
+		selCount: "Vybraných: %n",
+		deleteTitle: "Odstrániť %n položiek",
+		deleteConfirm: "Nedá sa vrátiť. Priečinky zmiznú aj s obsahom.",
+		btnDelete: "Odstrániť",
+		btnCancel: "Zrušiť",
+		batchPrefix: "Poznámka",
+		batchDone: "Premenovaných: %n",
 		setSupport: "Podporiť autora - WeChat QR",
 	},
 	sl: {
@@ -1862,6 +2030,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "Zračno",
 		sizeDesc: "Velikost, največje prvo",
 		kbMode: "Tipkovni način",
+		selCount: "Izbranih: %n",
+		deleteTitle: "Izbriši %n elementov",
+		deleteConfirm: "Ni mogoče razveljaviti. Mape se izbrišejo z vsebino.",
+		btnDelete: "Izbriši",
+		btnCancel: "Prekliči",
+		batchPrefix: "Zapisek",
+		batchDone: "Preimenovanih: %n",
 		setSupport: "Podpri avtorja - WeChat QR",
 	},
 	sr: {
@@ -1922,6 +2097,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "Prostrano",
 		sizeDesc: "Veličina, najveće prvo",
 		kbMode: "Režim tastature",
+		selCount: "Izabrano: %n",
+		deleteTitle: "Obriši %n stavki",
+		deleteConfirm: "Ne može se poništiti. Folderi se brišu sa sadržajem.",
+		btnDelete: "Obriši",
+		btnCancel: "Otkaži",
+		batchPrefix: "Beleška",
+		batchDone: "Preimenovano: %n",
 		setSupport: "Podrži autora - WeChat QR",
 	},
 	hr: {
@@ -1982,6 +2164,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "Prostrano",
 		sizeDesc: "Veličina, najveće prvo",
 		kbMode: "Način tipkovnice",
+		selCount: "Odabrano: %n",
+		deleteTitle: "Izbriši %n stavki",
+		deleteConfirm: "Nije moguće poništiti. Mape se brišu s sadržajem.",
+		btnDelete: "Izbriši",
+		btnCancel: "Odustani",
+		batchPrefix: "Bilješka",
+		batchDone: "Preimenovano: %n",
 		setSupport: "Podrži autora - WeChat QR",
 	},
 	hu: {
@@ -2042,6 +2231,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "Levegős",
 		sizeDesc: "Méret, legnagyobb elöl",
 		kbMode: "Billentyűzet mód",
+		selCount: "%n kijelölve",
+		deleteTitle: "%n elem törlése",
+		deleteConfirm: "Nem vonható vissza. A mappák tartalmukkal együtt törlődnek.",
+		btnDelete: "Törlés",
+		btnCancel: "Mégse",
+		batchPrefix: "Jegyzet",
+		batchDone: "%n elem átnevezve",
 		setSupport: "Szerző támogatása - WeChat QR",
 	},
 	ro: {
@@ -2102,6 +2298,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "Aerisită",
 		sizeDesc: "Dimensiune, cea mai mare prima",
 		kbMode: "Mod tastatură",
+		selCount: "%n selectate",
+		deleteTitle: "Șterge %n elemente",
+		deleteConfirm: "Nu se poate anula. Folderele se șterg cu tot conținutul.",
+		btnDelete: "Șterge",
+		btnCancel: "Anulează",
+		batchPrefix: "Notă",
+		batchDone: "%n elemente redenumite",
 		setSupport: "Susține autorul - QR WeChat",
 	},
 	ca: {
@@ -2162,6 +2365,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "Àmplia",
 		sizeDesc: "Mida, més gran primer",
 		kbMode: "Mode teclat",
+		selCount: "%n seleccionats",
+		deleteTitle: "Elimina %n elements",
+		deleteConfirm: "No es pot desfer. Les carpetes s'eliminen amb tot el contingut.",
+		btnDelete: "Elimina",
+		btnCancel: "Cancel·la",
+		batchPrefix: "Nota",
+		batchDone: "%n elements reanomenats",
 		setSupport: "Dona suport a l'autor - QR WeChat",
 	},
 	el: {
@@ -2222,6 +2432,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "Άνετη",
 		sizeDesc: "Μέγεθος, μεγαλύτερο πρώτα",
 		kbMode: "Λειτουργία πληκτρολογίου",
+		selCount: "%n επιλεγμένα",
+		deleteTitle: "Διαγραφή %n στοιχείων",
+		deleteConfirm: "Δεν αναιρείται. Οι φάκελοι διαγράφονται με το περιεχόμενό τους.",
+		btnDelete: "Διαγραφή",
+		btnCancel: "Άκυρο",
+		batchPrefix: "Σημείωση",
+		batchDone: "Μετονομάστηκαν %n στοιχεία",
 		setSupport: "Υποστηρίξτε τον δημιουργό - WeChat QR",
 	},
 	hi: {
@@ -2282,6 +2499,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "खुला",
 		sizeDesc: "आकार, सबसे बड़ा पहले",
 		kbMode: "कीबोर्ड मोड",
+		selCount: "%n चयनित",
+		deleteTitle: "%n आइटम हटाएँ",
+		deleteConfirm: "इसे वापस नहीं लाया जा सकता। फ़ोल्डर अपनी सामग्री सहित हट जाएँगे।",
+		btnDelete: "हटाएँ",
+		btnCancel: "रद्द करें",
+		batchPrefix: "नोट",
+		batchDone: "%n आइटम का नाम बदला",
 		setSupport: "लेखक का साथ दें - WeChat QR",
 	},
 	th: {
@@ -2342,6 +2566,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "โปร่ง",
 		sizeDesc: "ขนาด ใหญ่ก่อน",
 		kbMode: "โหมดคีย์บอร์ด",
+		selCount: "เลือก %n รายการ",
+		deleteTitle: "ลบ %n รายการ",
+		deleteConfirm: "ย้อนกลับไม่ได้ โฟลเดอร์จะถูกลบพร้อมเนื้อหาข้างใน",
+		btnDelete: "ลบ",
+		btnCancel: "ยกเลิก",
+		batchPrefix: "โน้ต",
+		batchDone: "เปลี่ยนชื่อ %n รายการแล้ว",
 		setSupport: "สนับสนุนผู้พัฒนา - WeChat QR",
 	},
 	ar: {
@@ -2402,6 +2633,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "واسعة",
 		sizeDesc: "الحجم، الأكبر أولاً",
 		kbMode: "وضع لوحة المفاتيح",
+		selCount: "تم تحديد %n",
+		deleteTitle: "حذف %n عناصر",
+		deleteConfirm: "لا يمكن التراجع. تُحذف المجلدات مع محتوياتها.",
+		btnDelete: "حذف",
+		btnCancel: "إلغاء",
+		batchPrefix: "ملاحظة",
+		batchDone: "تمت إعادة تسمية %n عناصر",
 		setSupport: "ادعم المؤلف - WeChat QR",
 	},
 	he: {
@@ -2462,6 +2700,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "מרווח",
 		sizeDesc: "גודל, הגדול ראשון",
 		kbMode: "מצב מקלדת",
+		selCount: "%n נבחרו",
+		deleteTitle: "מחיקת %n פריטים",
+		deleteConfirm: "אי אפשר לבטל. תיקיות נמחקות עם התוכן שלהן.",
+		btnDelete: "מחיקה",
+		btnCancel: "ביטול",
+		batchPrefix: "פתק",
+		batchDone: "%n פריטים שונו",
 		setSupport: "תמכו ביוצר - WeChat QR",
 	},
 	fa: {
@@ -2522,6 +2767,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "باز",
 		sizeDesc: "اندازه، بزرگ‌تر اول",
 		kbMode: "حالت صفحه‌کلید",
+		selCount: "%n انتخاب شده",
+		deleteTitle: "حذف %n مورد",
+		deleteConfirm: "قابل بازگشت نیست. پوשه‌ها با محتوایشان حذف می‌شوند.",
+		btnDelete: "حذف",
+		btnCancel: "انصراف",
+		batchPrefix: "یادداشت",
+		batchDone: "نام %n مورد تغییر کرد",
 		setSupport: "حمایت از نویسنده - WeChat QR",
 	},
 	be: {
@@ -2582,6 +2834,13 @@ const MG_LANGS_EXTRA = {
 		dComfortable: "Прасторная",
 		sizeDesc: "Памер, ад большога",
 		kbMode: "Рэжым клавіятуры",
+		selCount: "Выбрана: %n",
+		deleteTitle: "Выдаліць %n аб'ектаў",
+		deleteConfirm: "Адмяніць нельга. Папкі выдаляюцца разам са змесцівам.",
+		btnDelete: "Выдаліць",
+		btnCancel: "Адмена",
+		batchPrefix: "Нататка",
+		batchDone: "Перайменавана: %n",
 		setSupport: "Падтрымаць аўтара - WeChat QR",
 	},
 };
@@ -2910,7 +3169,8 @@ class MgView extends ItemView {
 		this.category = "root";
 		this.query = "";
 		this.cursor = -1;
-		this.selected = [];
+		this.selected = new Set();
+		this.anchor = null;
 		this.scope = plugin.data.searchScope || "title";
 		this.collapsed = new Set(plugin.data.collapsed || []);
 		this.sortMode = plugin.data.sortMode || "name-asc";
@@ -3277,6 +3537,7 @@ class MgView extends ItemView {
 		this.rowNodes = this.listEl ? [...this.listEl.querySelectorAll(".mg-note, .mg-folder")] : [];
 		if (this.cursor >= this.rowNodes.length) this.cursor = this.rowNodes.length - 1;
 		if (this.cursor >= 0) this.paintCursor();
+		this.paintSelection();
 	}
 
 	/* 只给"整块内容换掉"的场合用: 切顶栏、换排序、折叠展开. 搜索每敲一个
@@ -3461,6 +3722,11 @@ class MgView extends ItemView {
 		status.classList.remove("is-on");
 		status.textContent = "";
 
+		if (this.selected.size > 0) {
+			status.textContent = MG_TEXT.selCount.replace("%n", String(this.selected.size));
+			status.classList.add("is-on");
+			return;
+		}
 		if (this.searching) {
 			status.textContent = MG_TEXT.searching + " " + this.searchScanned + "/" + this.index.entries.length;
 			status.classList.add("is-on");
@@ -3499,7 +3765,8 @@ class MgView extends ItemView {
 	clearSearch() {
 		this.query = "";
 		this.cursor = -1;
-		this.selected = [];
+		this.selected = new Set();
+		this.anchor = null;
 		this.inputEl.value = "";
 		this.fullHits.clear();
 		this.searchEl.classList.remove("is-open");
@@ -4065,6 +4332,23 @@ MgView.prototype.onListClick = function (event) {
 	const path = node.dataset.path;
 	const kind = node.dataset.kind;
 
+	/* Ctrl 切一项, Shift 拉一段. 文件夹不参与多选, 点它还是折叠. */
+	if (kind === "note" && path) {
+		if (event.ctrlKey || event.metaKey) {
+			this.toggleSelect(path);
+			return;
+		}
+		if (event.shiftKey) {
+			this.rangeSelect(path);
+			return;
+		}
+	}
+	if (this.selected.size > 0) {
+		this.selected.clear();
+		this.anchor = null;
+		this.paintSelection();
+	}
+
 	if (kind === "dots") {
 		if (path) this.toggleCollapse(path);
 		return;
@@ -4360,7 +4644,7 @@ MgView.prototype.bindDrag = function () {
 	});
 
 	list.addEventListener("dragstart", (event) => {
-		if (this.editing !== "order") {
+		if (this.editing !== "order" && this.selected.size === 0) {
 			event.preventDefault();
 			return;
 		}
@@ -4371,13 +4655,16 @@ MgView.prototype.bindDrag = function () {
 			event.preventDefault();
 			return;
 		}
-		this.dragPath = node.dataset.path;
+		const path = node.dataset.path;
+		const many = this.selected.has(path) && this.selected.size > 1 ? [...this.selected] : [path];
+		this.dragPath = path;
+		this.dragPaths = many;
 		this.dragKind = kind;
 		node.classList.add("is-dragging");
 		if (event.dataTransfer) {
 			event.dataTransfer.effectAllowed = "move";
 			try {
-				event.dataTransfer.setData("text/plain", node.dataset.path);
+				event.dataTransfer.setData("text/plain", JSON.stringify(many));
 			} catch (error) {
 				/* 同上 */
 			}
@@ -4393,7 +4680,7 @@ MgView.prototype.bindDrag = function () {
 	};
 
 	tabs.addEventListener("dragover", (event) => {
-		if (this.editing !== "order" || !this.dragPath) return;
+		if (!this.dragPath) return;
 		const tab = event.target.closest ? event.target.closest(".mg-tab") : null;
 		if (!tab) return;
 		const key = tab.dataset.key;
@@ -4409,7 +4696,7 @@ MgView.prototype.bindDrag = function () {
 	});
 
 	tabs.addEventListener("drop", (event) => {
-		if (this.editing !== "order" || !this.dragPath) return;
+		if (!this.dragPath) return;
 		const tab = event.target.closest ? event.target.closest(".mg-tab") : null;
 		if (!tab) return;
 		const target = tab.dataset.key;
@@ -4427,7 +4714,7 @@ MgView.prototype.bindDrag = function () {
 	});
 
 	list.addEventListener("dragover", (event) => {
-		if (this.editing !== "order" || !this.dragPath) return;
+		if (!this.dragPath) return;
 		const node = event.target.closest ? event.target.closest("[data-kind]") : null;
 		if (!node || node.dataset.path === this.dragPath) return;
 		if (this.dragKind === "folder" && node.dataset.path.startsWith(this.dragPath + "/")) return;
@@ -4439,7 +4726,7 @@ MgView.prototype.bindDrag = function () {
 	});
 
 	list.addEventListener("drop", (event) => {
-		if (this.editing !== "order" || !this.dragPath) return;
+		if (!this.dragPath) return;
 		const node = event.target.closest ? event.target.closest("[data-kind]") : null;
 		const dragged = this.dragPath;
 		const kind = this.dragKind;
@@ -4450,6 +4737,11 @@ MgView.prototype.bindDrag = function () {
 		const targetPath = node.dataset.path;
 		const targetKind = node.dataset.kind;
 		if (kind === "folder" && targetPath.startsWith(dragged + "/")) return;
+
+		if (this.dragPaths && this.dragPaths.length > 1) {
+			void this.moveMany(this.dragPaths, targetKind === "folder" ? targetPath : mgDir(targetPath));
+			return;
+		}
 
 		if (targetKind === "folder") {
 			void this.moveInto(dragged, targetPath);
@@ -4592,9 +4884,165 @@ MgView.prototype.activateRow = function (node) {
 
 MgView.prototype.selectVisible = function () {
 	const rows = this.rowNodes || [];
-	this.selected = rows.map((node) => node.dataset.path).filter(Boolean);
-	for (const node of rows) node.classList.add("is-checked");
+	this.selected = new Set(rows.map((node) => node.dataset.path).filter(Boolean));
+	this.anchor = rows.length > 0 ? rows[0].dataset.path : null;
+	this.paintSelection();
+	this.syncStatus(rows.length, rows.length);
 };
+
+MgView.prototype.paintSelection = function () {
+	for (const node of this.rowNodes || []) {
+		node.classList.toggle("is-checked", this.selected.has(node.dataset.path));
+	}
+};
+
+MgView.prototype.toggleSelect = function (path) {
+	if (!path) return;
+	if (this.selected.has(path)) this.selected.delete(path);
+	else this.selected.add(path);
+	this.anchor = path;
+	this.paintSelection();
+	this.syncStatus(this.selected.size, this.selected.size);
+};
+
+MgView.prototype.rangeSelect = function (path) {
+	const rows = this.rowNodes || [];
+	const to = rows.findIndex((node) => node.dataset.path === path);
+	if (to < 0) return;
+	const from = rows.findIndex((node) => node.dataset.path === this.anchor);
+	const start = from < 0 ? to : Math.min(from, to);
+	const end = from < 0 ? to : Math.max(from, to);
+	this.selected = new Set(rows.slice(start, end + 1).map((node) => node.dataset.path));
+	if (this.anchor === null) this.anchor = path;
+	this.paintSelection();
+	this.syncStatus(this.selected.size, this.selected.size);
+};
+
+/* ---------- 批量 ---------- */
+
+MgView.prototype.moveMany = async function (paths, target) {
+	for (const from of paths) {
+		if (!from || from === target) continue;
+		if (target.startsWith(from + "/")) continue;
+		await this.moveInto(from, target);
+	}
+	this.selected.clear();
+	this.paintSelection();
+};
+
+MgView.prototype.batchDelete = async function () {
+	const paths = [...this.selected];
+	if (paths.length === 0) return;
+	const modal = new MgConfirmModal(
+		this.app,
+		MG_TEXT.deleteTitle.replace("%n", String(paths.length)),
+		MG_TEXT.deleteConfirm,
+		async () => {
+			let failed = 0;
+			for (const path of paths) {
+				const file = this.app.vault.getAbstractFileByPath(path);
+				if (!file) {
+					failed += 1;
+					continue;
+				}
+				const isFolder = typeof file.children !== "undefined";
+				try {
+					await this.app.vault.delete(file, isFolder);
+				} catch (error) {
+					failed += 1;
+				}
+			}
+			this.selected.clear();
+			this.anchor = null;
+			this.rebuild();
+			if (failed > 0) new Notice(MG_TEXT.deleteFailed + ": " + failed);
+		}
+	);
+	modal.open();
+};
+
+/* 笔记-001, 笔记-002 ... 按当前顺序编号, 扩展名各自保留. */
+MgView.prototype.batchRename = async function () {
+	const paths = [...this.selected];
+	if (paths.length === 0) return;
+	const files = paths
+		.map((path) => this.app.vault.getAbstractFileByPath(path))
+		.filter((file) => file && typeof file.children === "undefined");
+	if (files.length === 0) return;
+
+	files.sort((a, b) => String(a.path).localeCompare(String(b.path), "zh"));
+	let index = 1;
+	let failed = 0;
+	for (const file of files) {
+		const dir = mgDir(file.path);
+		const ext = file.extension ? "." + file.extension : "";
+		const name = MG_TEXT.batchPrefix + "-" + String(index).padStart(3, "0") + ext;
+		try {
+			await this.app.vault.rename(file, mgJoin(dir, name));
+			index += 1;
+		} catch (error) {
+			failed += 1;
+		}
+	}
+	const done = index - 1;
+	this.selected.clear();
+	this.anchor = null;
+	this.rebuild();
+	if (done > 0) new Notice(MG_TEXT.batchDone.replace("%n", String(done)));
+	if (failed > 0) new Notice(MG_TEXT.renameFailed + ": " + failed);
+};
+
+/* 删东西之前问一句. 批量之后一步做完, 不会弹出十几个对话框. */
+class MgConfirmModal extends Modal {
+	constructor(app, title, body, onYes) {
+		super(app);
+		this.titleText = title;
+		this.bodyText = body;
+		this.onYes = onYes;
+	}
+
+	onOpen() {
+		const box = this.contentEl;
+		mgClear(box);
+		box.classList.add("mg-modal");
+
+		const title = document.createElement("div");
+		title.className = "mg-modal-title";
+		title.textContent = this.titleText;
+		box.appendChild(title);
+
+		const body = document.createElement("div");
+		body.className = "mg-modal-body";
+		body.textContent = this.bodyText;
+		box.appendChild(body);
+
+		const row = document.createElement("div");
+		row.className = "mg-modal-row";
+
+		const cancel = document.createElement("button");
+		cancel.type = "button";
+		cancel.className = "mg-btn";
+		cancel.textContent = MG_TEXT.btnCancel;
+		cancel.addEventListener("click", () => this.close());
+
+		const ok = document.createElement("button");
+		ok.type = "button";
+		ok.className = "mg-btn is-danger";
+		ok.textContent = MG_TEXT.btnDelete;
+		ok.addEventListener("click", () => {
+			this.close();
+			void this.onYes();
+		});
+
+		row.appendChild(cancel);
+		row.appendChild(ok);
+		box.appendChild(row);
+	}
+
+	onClose() {
+		mgClear(this.contentEl);
+	}
+}
 
 /* ===== 40-search.js ===== */
 "use strict";

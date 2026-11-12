@@ -20,6 +20,19 @@ const stub = {
 		showAtMouseEvent() {}
 		showAtPosition() {}
 	},
+	Modal: class {
+		constructor(app) {
+			this.app = app;
+			this.contentEl = {
+				firstChild: null,
+				appendChild() {},
+				removeChild() {},
+				classList: { add() {}, remove() {}, toggle() {} }
+			};
+		}
+		open() {}
+		close() {}
+	},
 	Notice: class {},
 	Setting: class {},
 	PluginSettingTab: class {},
