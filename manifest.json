@@ -1,7 +1,7 @@
 {
   "id": "manager",
   "name": "Note Manager",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "minAppVersion": "1.5.0",
   "description": "A file manager for your vault: sort, search and reorganise notes, PDFs, images and canvas.",
   "author": "Depthinker",

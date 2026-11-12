@@ -7,7 +7,7 @@ A file manager for your vault: sort, search and reorganise notes, PDFs, images a
 ![Note structure as an indented tree](assets/screenshot-3.png)
 ![Note structure as a force graph](assets/screenshot-4.png)
 
-Supported languages: English, 简体中文, 繁體中文, 日本語, 한국어, Deutsch, Français, Español, Русский, Italiano, Português, Polski, Nederlands, Türkçe, Українська, Bahasa Indonesia, Svenska, Dansk, Norsk, Suomi, Čeština, Slovenčina, Slovenščina, Srpski, Hrvatski, Magyar, Română, Català, Ελληνικά, हिन्दी, ไทย, العربية, עברית, فارسی, Беларуская
+Supported languages: English, 简体中文, 繁體中文, 日本語, 한국어, Deutsch, Français, Español, Русский, Italiano, Português, Polski, Nederlands, Türkçe, Українська, Bahasa Indonesia, Svenska, Dansk, Norsk, Suomi, Čeština, Slovenčina, Slovenščina, Srpski, Hrvatski, Magyar, Română, Català, Ελληνικά, हिन्दी, ไทย, Беларуская
 
 ---
 
@@ -15,7 +15,7 @@ Supported languages: English, 简体中文, 繁體中文, 日本語, 한국어, 
 
 Manager is, in a sense, a replacement for the file list. The built-in file explorer lives in a narrow sidebar, which makes real note management hard; Manager takes the main area, which makes tidying up far easier.
 
-It sorts and groups notes using nothing but each file's path, name, modification time and creation time.
+It sorts and groups notes using each file's path, name, size, modification time, creation time and link count — nothing else, no content is read.
 
 ---
 
@@ -224,7 +224,7 @@ In the All view, `.pdf today` lists every PDF modified today across the vault. C
 
 ## No build step
 
-Manager ships as one file. There is no bundler, no `node_modules`, no compile pass, nothing to `npm install` before you can read the source: `main.js` is 2,472 lines and every one of them is the code that runs. Open it and read it.
+Manager ships as one file. There is no bundler, no `node_modules`, no compile pass, nothing to `npm install` before you can read the source: `main.js` is 5,547 lines and every one of them is the code that runs. Open it and read it.
 
 The only outside name it reaches for is `obsidian`, which the app injects at load time. Everything else is plain JavaScript.
 
@@ -239,6 +239,13 @@ node test.cjs
 ---
 
 ## Version
+
+1.0.8
+
+- Renames and deletions now go through `fileManager`, so renames update links and deletions go to the trash instead of vanishing
+- Dropped Arabic, Hebrew and Persian: the layout is left to right, and half-supported right-to-left is worse than not claiming it
+- Row marks are off by default — nearly every note has no outgoing links, so the dots were on almost every row
+- README numbers corrected: line count, sort keys, language count
 
 1.0.7
 
