@@ -39,6 +39,28 @@ body {
 	font-family: var(--font-interface, var(--font-text, inherit));
 	font-size: 13px;
 	color: var(--text-normal);
+	/* 三档密度只改这几个数: 两种行高加三级字号. 其余尺寸不动. */
+	--mg-row-one: 30px;
+	--mg-row-two: 40px;
+	--mg-fs-1: 18px;
+	--mg-fs-2: 16px;
+	--mg-fs-3: 13px;
+}
+
+.view-content.mg-view.is-compact {
+	--mg-row-one: 26px;
+	--mg-row-two: 34px;
+	--mg-fs-1: 17px;
+	--mg-fs-2: 15px;
+	--mg-fs-3: 12px;
+}
+
+.view-content.mg-view.is-comfortable {
+	--mg-row-one: 36px;
+	--mg-row-two: 48px;
+	--mg-fs-1: 20px;
+	--mg-fs-2: 17px;
+	--mg-fs-3: 14px;
 }
 
 .mg-page {
@@ -401,6 +423,21 @@ body.mg-booting-main .workspace-split.mod-root {
 	text-overflow: ellipsis;
 }
 
+.mg-folder-tail {
+	flex: 0 0 auto;
+	margin-left: 8px;
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+}
+
+.mg-folder-size {
+	flex: 0 0 auto;
+	font-size: 11px;
+	color: var(--text-faint);
+	font-variant-numeric: tabular-nums;
+}
+
 .mg-folder-count {
 	flex: 0 0 auto;
 	margin-left: 8px;
@@ -423,7 +460,7 @@ body.mg-booting-main .workspace-split.mod-root {
 }
 
 .mg-folder.is-level-1 .mg-folder-name {
-	font-size: 18px;
+	font-size: var(--mg-fs-1);
 	line-height: 1.3;
 }
 
@@ -433,7 +470,7 @@ body.mg-booting-main .workspace-split.mod-root {
 }
 
 .mg-folder.is-level-2 .mg-folder-name {
-	font-size: 16px;
+	font-size: var(--mg-fs-2);
 	line-height: 1.3;
 }
 
@@ -442,7 +479,7 @@ body.mg-booting-main .workspace-split.mod-root {
 }
 
 .mg-folder.is-level-3 .mg-folder-name {
-	font-size: 13px;
+	font-size: var(--mg-fs-3);
 	line-height: 1.35;
 	color: var(--text-muted);
 }
@@ -452,7 +489,7 @@ body.mg-booting-main .workspace-split.mod-root {
 }
 
 .mg-folder.is-level-4 .mg-folder-name {
-	font-size: 13px;
+	font-size: var(--mg-fs-3);
 	line-height: 1.4;
 	color: var(--text-muted);
 }
@@ -500,7 +537,7 @@ body.mg-booting-main .workspace-split.mod-root {
 	display: flex;
 	align-items: center;
 	gap: 12px;
-	height: 30px;
+	height: var(--mg-row-one);
 	padding: 0 12px;
 	border-radius: 6px;
 	cursor: pointer;
@@ -508,7 +545,7 @@ body.mg-booting-main .workspace-split.mod-root {
 }
 
 .mg-note.is-two-line {
-	height: 40px;
+	height: var(--mg-row-two);
 }
 
 .mg-note:hover {
@@ -516,6 +553,7 @@ body.mg-booting-main .workspace-split.mod-root {
 }
 
 .mg-note-main {
+	flex: 1 1 auto;
 	display: flex;
 	flex-direction: column;
 	gap: 1px;
@@ -540,12 +578,22 @@ body.mg-booting-main .workspace-split.mod-root {
 	text-overflow: ellipsis;
 }
 
+/* 右侧两列都定宽, 数字才不会因为位数不同而左右跳. */
+.mg-note-size,
 .mg-note-when {
-	margin-left: auto;
 	flex: 0 0 auto;
 	font-size: 11px;
 	color: var(--text-muted);
 	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
+
+.mg-note-size {
+	width: 46px;
+}
+
+.mg-note-when {
+	width: 54px;
 }
 
 /* 空状态两行: 一行说现在没有什么, 一行说下一步做什么.
@@ -814,4 +862,171 @@ body.mg-booting-main .workspace-split.mod-root {
 
 .mg-note.is-checked {
 	background: var(--mg-fill);
+}
+
+/* ---------- 关系图谱 ----------
+
+   横向的树, 连线全用边框画: 每一层往右缩进一段, 左边一条竖线, 每个节点
+   用伪元素补一小段横线接上去. 不引 SVG, 也不做力导向, 层级本来就是定的. */
+
+.mg-map-view {
+	position: relative;
+	padding: 28px 32px 40px;
+	overflow: auto;
+}
+
+/* 右上角的两个切换按钮, 不占布局, 浮在图上. */
+.mg-map-tools {
+	position: absolute;
+	top: 18px;
+	right: 24px;
+	display: flex;
+	gap: 2px;
+	z-index: 2;
+}
+
+.mg-map-tool {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border: none;
+	border-radius: 6px;
+	background: none;
+	color: var(--text-faint);
+	cursor: pointer;
+	transition: color var(--mg-dur) var(--mg-ease);
+}
+
+.mg-map-tool:hover {
+	color: var(--text-normal);
+}
+
+.mg-map-tool.is-on {
+	color: var(--text-accent);
+}
+
+.mg-map-tool svg {
+	width: 16px;
+	height: 16px;
+	stroke-width: 1.7;
+}
+
+.mg-map {
+	font-size: 13px;
+	line-height: 1.4;
+}
+
+.mg-map-node {
+	position: relative;
+}
+
+.mg-map-label {
+	display: inline-block;
+	padding: 3px 8px;
+	border-radius: 5px;
+	color: var(--text-muted);
+	white-space: nowrap;
+}
+
+.mg-map-node.is-root > .mg-map-label {
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--text-normal);
+}
+
+.mg-map-children {
+	margin-left: 12px;
+	padding-left: 18px;
+	border-left: 1px solid var(--mg-hair);
+}
+
+.mg-map-children > .mg-map-node {
+	padding: 1px 0;
+}
+
+.mg-map-children > .mg-map-node::before {
+	content: "";
+	position: absolute;
+	left: -18px;
+	top: 13px;
+	width: 14px;
+	border-top: 1px solid var(--mg-hair);
+}
+
+.mg-map-label:hover {
+	background: var(--mg-fill);
+	color: var(--text-normal);
+}
+
+/* 动态版: SVG 径向图. 连线用 pathLength=1 归一化, 再用 stroke-dashoffset
+   从 1 收回到 0, 看起来就是一根根长出来; 节点按层错开淡入. */
+
+.mg-map-svg {
+	display: block;
+	cursor: grab;
+	width: 100%;
+	height: auto;
+	max-height: calc(100vh - 140px);
+}
+
+.mg-map-link {
+	stroke: var(--mg-hair);
+	stroke-width: 1;
+	stroke-dasharray: 1;
+	stroke-dashoffset: 1;
+	animation: mg-map-draw 520ms var(--mg-ease) forwards;
+}
+
+@keyframes mg-map-draw {
+	to {
+		stroke-dashoffset: 0;
+	}
+}
+
+.mg-map-dot {
+	cursor: grab;
+	opacity: 0;
+	animation: mg-map-dot-in 360ms var(--mg-ease) forwards;
+}
+
+@keyframes mg-map-dot-in {
+	to {
+		opacity: 1;
+	}
+}
+
+.mg-map-dot circle {
+	fill: var(--text-faint);
+	transition: fill var(--mg-dur) var(--mg-ease);
+}
+
+.mg-map-dot text {
+	fill: var(--text-muted);
+	font-family: var(--font-interface, inherit);
+	font-size: 11px;
+}
+
+.mg-map-dot.is-depth-0 circle {
+	fill: var(--text-accent);
+}
+
+.mg-map-dot.is-depth-0 text {
+	fill: var(--text-normal);
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.mg-map-dot.is-depth-1 text {
+	fill: var(--text-normal);
+}
+
+.mg-map-dot:hover circle {
+	fill: var(--text-accent);
+}
+
+.mg-map-dot:hover text {
+	fill: var(--text-normal);
 }

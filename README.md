@@ -2,9 +2,12 @@
 
 A file manager for your vault: sort, search and reorganise notes, PDFs, images and canvas from one wide view.
 
-Supported languages: English, 简体中文, 繁體中文, 日本語, 한국어, Deutsch, Français, Español
-
 ![Note Manager showing a vault with many folders](assets/screenshot-1.png)
+![Note Manager with the Baseline theme](assets/screenshot-2.png)
+![Note structure as an indented tree](assets/screenshot-3.png)
+![Note structure as a force graph](assets/screenshot-4.png)
+
+Supported languages: English, 简体中文, 繁體中文, 日本語, 한국어, Deutsch, Français, Español, Русский, Italiano, Português, Polski, Nederlands, Türkçe, Українська, Bahasa Indonesia, Svenska, Dansk, Norsk, Suomi, Čeština, Slovenčina, Slovenščina, Srpski, Hrvatski, Magyar, Română, Català, Ελληνικά, हिन्दी, ไทย, العربية, עברית, فارسی, Беларуская
 
 ---
 
@@ -63,6 +66,7 @@ Folder names in the top bar can be dragged; this only changes display order and 
 - Modified, oldest first
 - Created, newest first
 - Created, oldest first
+- Size, largest first
 
 ### Below the divider
 
@@ -75,6 +79,8 @@ Type size steps down by level:
 - Third level and deeper 13, in grey
 
 Click a folder heading to collapse its contents.
+
+Each row can carry two columns on the right: file size and how long ago the file was modified. Both are off by default except the time. Folder headings always show how many files sit inside, and their total size once the size column is on.
 
 ### Motion
 
@@ -101,6 +107,23 @@ The list also picks up focus whenever you click a row. From there:
 - `/` — jump into the filter box from anywhere in the view
 - `Esc` — clear the filter, or leave create and reorder modes
 - `Ctrl+A` — mark every visible row
+
+## Note structure
+
+The third icon in the ribbon opens a structure view of the whole vault: the vault name, then every folder branching out down to the leaf folders.
+
+Two styles, switched by the two icons in the top right corner of the view — the same setting also lives in the settings page:
+
+- Animated, the default — a graph. The vault sits at the centre, levels spread outward, then a small force simulation pushes overlapping labels apart. Links draw themselves in and nodes fade in by depth. Drag any node and it follows the pointer; let go and it settles back. Drag the empty background to pan.
+- Static — an indented tree with hairline connectors, easier to scan when the vault runs deep.
+
+The simulation is four numbers: 1400/d² repulsion, springs targeting 110, centre gravity 0.0025, damping 0.86. Past 400 nodes it skips the simulation and draws the final positions directly.
+
+Both read the same index the list does, so blocked folders stay out and the picture matches the disk.
+
+The ribbon icon can be turned off in settings; the command palette entry stays either way.
+
+---
 
 ## Filter
 
@@ -146,6 +169,12 @@ In the All view, `.pdf today` lists every PDF modified today across the vault. C
 - `homePage`: whether Manager opens on startup
 - `collapseSidebar`: whether the left sidebar collapses on open
 - `animations`: interface animation toggle
+- `keyboardMode`: single click selects instead of opening
+- `showSize`: file size column
+- `showTime`: modified time column
+- `density`: `compact`, `normal` or `comfortable`
+- `showMapIcon`: the structure view icon in the ribbon
+- `mapMode`: `dynamic` or `static`
 
 ---
 
@@ -165,15 +194,15 @@ node test.cjs
 
 ---
 
-## Screenshots
-
-![A vault with many folders](assets/screenshot-1.png)
-
-![A smaller vault](assets/screenshot-2.png)
-
----
-
 ## Version
+
+1.0.4
+
+- Size column on every row, plus the recursive size beside every folder heading
+- Seventh sort order: size, largest first
+- Three densities — compact, regular, comfortable — changing only row height and the type scale
+- Note structure view: the whole vault as a draggable force graph or an indented tree, toggled from its top right corner
+- Fixed: the status line said zero results while the list still had rows
 
 1.0.3
 

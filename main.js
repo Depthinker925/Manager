@@ -12,10 +12,12 @@ const obsidian = require("obsidian");
 const { Plugin, ItemView, Menu, Notice, setIcon, Setting, PluginSettingTab, getLanguage } = obsidian;
 
 const MG_VIEW_TYPE = "manager-view";
+const MG_MAP_TYPE = "manager-map";
 /* 核心插件的彩带图标已经被 files / search / bookmark / tags / list-tree /
    git-fork / layout-dashboard / calendar-days / file-stack / dice / terminal /
    file-search / layout-grid / file-plus 这些占完了。notebook-pen 不在其中。 */
 const MG_ICON = "notebook-pen";
+const MG_MAP_ICON = "waypoints";
 
 const MG_DEFAULT = {
 	tabOrder: [],
@@ -32,6 +34,11 @@ const MG_DEFAULT = {
 	showEmptyFolders: false,
 	animations: true,
 	keyboardMode: false,
+	showSize: false,
+	showTime: true,
+	density: "normal",
+	showMapIcon: true,
+	mapMode: "dynamic",
 	homePage: false,
 	collapseSidebar: true,
 	blockedFolders: ""
@@ -94,12 +101,24 @@ function mgUnique(taken, wanted, isFolder) {
    名称用中文排序规则，时间直接比较毫秒。手工顺序存在设置里，它排在最前面，
    不在手工顺序里的条目按当前排序规则跟在后面，这样新文件不会插到第一行。 */
 
+function mgFormatSize(bytes) {
+	const value = mgNumber(bytes);
+	if (value <= 0) return "";
+	if (value < 1024) return String(Math.round(value)) + " B";
+	const kb = value / 1024;
+	if (kb < 1024) return (kb < 10 ? kb.toFixed(1) : String(Math.round(kb))) + " KB";
+	const mb = kb / 1024;
+	if (mb < 1024) return (mb < 10 ? mb.toFixed(1) : String(Math.round(mb))) + " MB";
+	return (mb / 1024).toFixed(1) + " GB";
+}
+
 function mgComparator(mode) {
 	const descending = String(mode || "").endsWith("-desc");
 	return function (a, b) {
 		let value = 0;
 		if (String(mode).startsWith("mtime")) value = a.mtime - b.mtime;
 		else if (String(mode).startsWith("ctime")) value = a.ctime - b.ctime;
+		else if (String(mode).startsWith("size")) value = mgNumber(a.size) - mgNumber(b.size);
 		else value = String(a.title || "").localeCompare(String(b.title || ""), "zh");
 		return descending ? -value : value;
 	};
@@ -321,7 +340,7 @@ const MG_LANGS = {
 		ctimeDesc: "创建时间 新到旧",
 		ctimeAsc: "创建时间 旧到新",
 		ribbonOpen: "打开 Manager",
-		ribbonSettings: "Manager 设置",
+		ribbonSettings: "打开设置",
 		cmdOpen: "打开 Manager",
 		setBlocked: "屏蔽文件夹",
 		setEmptyFolders: "显示空文件夹",
@@ -331,6 +350,19 @@ const MG_LANGS = {
 		setHomePage: "设为首页",
 		setAnimations: "界面动画",
 		setCollapse: "开启时收起左侧边栏",
+		mapMode: "图谱样式",
+		mapDynamic: "动态",
+		mapStatic: "静态",
+		mapTitle: "笔记结构",
+		mapRibbon: "查看笔记结构视图",
+		setMapIcon: "左侧新增图谱图标",
+		showSize: "显示体积",
+		showTime: "显示时间",
+		density: "密度",
+		dCompact: "紧凑",
+		dNormal: "常规",
+		dComfortable: "宽松",
+		sizeDesc: "体积 大到小",
 		kbMode: "键盘模式",
 		setSupport: "支持作者 - 微信扫码",
 	},
@@ -369,7 +401,7 @@ const MG_LANGS = {
 		ctimeDesc: "建立時間 新到舊",
 		ctimeAsc: "建立時間 舊到新",
 		ribbonOpen: "開啟 Manager",
-		ribbonSettings: "Manager 設定",
+		ribbonSettings: "開啟設定",
 		cmdOpen: "開啟 Manager",
 		setBlocked: "封鎖資料夾",
 		setEmptyFolders: "顯示空資料夾",
@@ -379,6 +411,19 @@ const MG_LANGS = {
 		setHomePage: "設為首頁",
 		setAnimations: "介面動畫",
 		setCollapse: "開啟時收起左側邊欄",
+		mapMode: "圖譜樣式",
+		mapDynamic: "動態",
+		mapStatic: "靜態",
+		mapTitle: "筆記結構",
+		mapRibbon: "檢視筆記結構",
+		setMapIcon: "側邊欄圖譜圖示",
+		showSize: "顯示大小",
+		showTime: "顯示時間",
+		density: "密度",
+		dCompact: "緊湊",
+		dNormal: "一般",
+		dComfortable: "寬鬆",
+		sizeDesc: "大小 大到小",
 		kbMode: "鍵盤模式",
 		setSupport: "支持作者 - 微信掃碼",
 	},
@@ -417,7 +462,7 @@ const MG_LANGS = {
 		ctimeDesc: "Created, newest first",
 		ctimeAsc: "Created, oldest first",
 		ribbonOpen: "Open Manager",
-		ribbonSettings: "Manager settings",
+		ribbonSettings: "Open settings",
 		cmdOpen: "Open Manager",
 		setBlocked: "Blocked folders",
 		setEmptyFolders: "Show empty folders",
@@ -427,6 +472,19 @@ const MG_LANGS = {
 		setHomePage: "Open on startup",
 		setAnimations: "Interface animations",
 		setCollapse: "Collapse left sidebar",
+		mapMode: "Map style",
+		mapDynamic: "Animated",
+		mapStatic: "Static",
+		mapTitle: "Note structure",
+		mapRibbon: "View note structure",
+		setMapIcon: "Map icon in sidebar",
+		showSize: "Show file size",
+		showTime: "Show modified time",
+		density: "Density",
+		dCompact: "Compact",
+		dNormal: "Regular",
+		dComfortable: "Comfortable",
+		sizeDesc: "Size, largest first",
 		kbMode: "Keyboard mode",
 		setSupport: "Support the author - WeChat QR",
 	},
@@ -465,7 +523,7 @@ const MG_LANGS = {
 		ctimeDesc: "作成日 新しい順",
 		ctimeAsc: "作成日 古い順",
 		ribbonOpen: "Manager を開く",
-		ribbonSettings: "Manager の設定",
+		ribbonSettings: "設定を開く",
 		cmdOpen: "Manager を開く",
 		setBlocked: "除外するフォルダ",
 		setEmptyFolders: "空のフォルダを表示",
@@ -475,6 +533,19 @@ const MG_LANGS = {
 		setHomePage: "起動時に開く",
 		setAnimations: "UI アニメーション",
 		setCollapse: "左サイドバーを畳む",
+		mapMode: "マップ表示",
+		mapDynamic: "動きあり",
+		mapStatic: "静止",
+		mapTitle: "ノート構造",
+		mapRibbon: "ノート構造を表示",
+		setMapIcon: "サイドバーにマップ",
+		showSize: "サイズを表示",
+		showTime: "更新日時を表示",
+		density: "密度",
+		dCompact: "詰める",
+		dNormal: "標準",
+		dComfortable: "ゆったり",
+		sizeDesc: "サイズ 大きい順",
 		kbMode: "キーボード操作",
 		setSupport: "作者を支援 - WeChat QR",
 	},
@@ -513,7 +584,7 @@ const MG_LANGS = {
 		ctimeDesc: "생성일 최신순",
 		ctimeAsc: "생성일 오래된순",
 		ribbonOpen: "Manager 열기",
-		ribbonSettings: "Manager 설정",
+		ribbonSettings: "설정 열기",
 		cmdOpen: "Manager 열기",
 		setBlocked: "숨길 폴더",
 		setEmptyFolders: "빈 폴더 표시",
@@ -523,6 +594,19 @@ const MG_LANGS = {
 		setHomePage: "시작 시 열기",
 		setAnimations: "인터페이스 애니메이션",
 		setCollapse: "왼쪽 사이드바 접기",
+		mapMode: "맵 스타일",
+		mapDynamic: "움직임",
+		mapStatic: "정적",
+		mapTitle: "노트 구조",
+		mapRibbon: "노트 구조 보기",
+		setMapIcon: "사이드바 맵 아이콘",
+		showSize: "용량 표시",
+		showTime: "수정 시각 표시",
+		density: "밀도",
+		dCompact: "촘촘히",
+		dNormal: "보통",
+		dComfortable: "넉넉히",
+		sizeDesc: "용량 큰 순",
 		kbMode: "키보드 모드",
 		setSupport: "작가 후원 - 위챗 QR",
 	},
@@ -561,7 +645,7 @@ const MG_LANGS = {
 		ctimeDesc: "Erstellt, neueste zuerst",
 		ctimeAsc: "Erstellt, älteste zuerst",
 		ribbonOpen: "Manager öffnen",
-		ribbonSettings: "Manager-Einstellungen",
+		ribbonSettings: "Einstellungen öffnen",
 		cmdOpen: "Manager öffnen",
 		setBlocked: "Ausgeblendete Ordner",
 		setEmptyFolders: "Leere Ordner zeigen",
@@ -571,6 +655,19 @@ const MG_LANGS = {
 		setHomePage: "Beim Start öffnen",
 		setAnimations: "Oberflächenanimationen",
 		setCollapse: "Linke Seitenleiste einklappen",
+		mapMode: "Kartenstil",
+		mapDynamic: "Bewegt",
+		mapStatic: "Statisch",
+		mapTitle: "Notizstruktur",
+		mapRibbon: "Notizstruktur anzeigen",
+		setMapIcon: "Karten-Symbol in der Seitenleiste",
+		showSize: "Dateigröße zeigen",
+		showTime: "Änderungszeit zeigen",
+		density: "Dichte",
+		dCompact: "Kompakt",
+		dNormal: "Normal",
+		dComfortable: "Großzügig",
+		sizeDesc: "Größe, größte zuerst",
 		kbMode: "Tastaturmodus",
 		setSupport: "Autor unterstützen - WeChat-QR",
 	},
@@ -609,7 +706,7 @@ const MG_LANGS = {
 		ctimeDesc: "Créé, récent d'abord",
 		ctimeAsc: "Créé, ancien d'abord",
 		ribbonOpen: "Ouvrir Manager",
-		ribbonSettings: "Réglages de Manager",
+		ribbonSettings: "Ouvrir les réglages",
 		cmdOpen: "Ouvrir Manager",
 		setBlocked: "Dossiers masqués",
 		setEmptyFolders: "Afficher les dossiers vides",
@@ -619,6 +716,19 @@ const MG_LANGS = {
 		setHomePage: "Ouvrir au démarrage",
 		setAnimations: "Animations de l'interface",
 		setCollapse: "Replier la barre latérale",
+		mapMode: "Style de carte",
+		mapDynamic: "Animée",
+		mapStatic: "Statique",
+		mapTitle: "Structure des notes",
+		mapRibbon: "Voir la structure",
+		setMapIcon: "Icône carte dans la barre",
+		showSize: "Afficher la taille",
+		showTime: "Afficher la date",
+		density: "Densité",
+		dCompact: "Compact",
+		dNormal: "Normal",
+		dComfortable: "Confortable",
+		sizeDesc: "Taille, décroissante",
 		kbMode: "Mode clavier",
 		setSupport: "Soutenir l'auteur - QR WeChat",
 	},
@@ -657,7 +767,7 @@ const MG_LANGS = {
 		ctimeDesc: "Creado, reciente primero",
 		ctimeAsc: "Creado, antiguo primero",
 		ribbonOpen: "Abrir Manager",
-		ribbonSettings: "Ajustes de Manager",
+		ribbonSettings: "Abrir ajustes",
 		cmdOpen: "Abrir Manager",
 		setBlocked: "Carpetas ocultas",
 		setEmptyFolders: "Mostrar carpetas vacías",
@@ -667,10 +777,35 @@ const MG_LANGS = {
 		setHomePage: "Abrir al iniciar",
 		setAnimations: "Animaciones de la interfaz",
 		setCollapse: "Plegar barra lateral",
+		mapMode: "Estilo de mapa",
+		mapDynamic: "Animado",
+		mapStatic: "Estático",
+		mapTitle: "Estructura de notas",
+		mapRibbon: "Ver estructura",
+		setMapIcon: "Icono de mapa en la barra",
+		showSize: "Mostrar tamaño",
+		showTime: "Mostrar fecha",
+		density: "Densidad",
+		dCompact: "Compacta",
+		dNormal: "Normal",
+		dComfortable: "Amplia",
+		sizeDesc: "Tamaño, mayor primero",
 		kbMode: "Modo teclado",
 		setSupport: "Apoyar al autor - QR de WeChat",
 	}
 };
+
+/* Obsidian 支持的语言比这里翻译的多得多. 没翻的一律指向英文包, 这样
+   任何语言设置下界面都不会出现空白或 undefined, 只是显示英文. */
+const MG_LANG_ALIASES = [
+	"ar", "be", "ca", "cs", "da", "el", "en-GB", "fa", "fi", "he", "hi",
+	"hr", "hu", "id", "it", "nl", "no", "pl", "pt", "pt-BR", "ro", "ru",
+	"sk", "sl", "sr", "sv", "th", "tr", "uk", "vi"
+];
+
+for (const code of MG_LANG_ALIASES) {
+	if (!MG_LANGS[code]) MG_LANGS[code] = MG_LANGS.en;
+}
 
 function mgLanguage() {
 	let raw = "";
@@ -694,8 +829,1767 @@ const MG_SORTS = [
 	{ key: "mtime-desc", label: MG_TEXT.mtimeDesc },
 	{ key: "mtime-asc", label: MG_TEXT.mtimeAsc },
 	{ key: "ctime-desc", label: MG_TEXT.ctimeDesc },
-	{ key: "ctime-asc", label: MG_TEXT.ctimeAsc }
+	{ key: "ctime-asc", label: MG_TEXT.ctimeAsc },
+	{ key: "size-desc", label: MG_TEXT.sizeDesc }
 ];
+
+/* ===== 06-i18n-extra.js ===== */
+"use strict";
+
+/* ---------- 其余语言的文案 ----------
+
+   和 05 里的结构一样, 由 Object.assign 合并进 MG_LANGS. 单独一个文件是因为
+   三十多种语言塞进 05 会把那份文件撑到没法读; 这里是纯数据, 不参与逻辑.
+
+   翻译按各语言自己的说法写, 不做逐字对照. */
+
+const MG_LANGS_EXTRA = {
+	ru: {
+		root: "Корень",
+		recent: "Недавние",
+		all: "Все",
+		untitled: "Без названия",
+		untitledFolder: "Папка без названия",
+		empty: "Здесь пока ничего нет",
+		emptyHint: "Создайте заметку кнопкой +",
+		emptySearch: "Ничего не найдено",
+		emptySearchHint: "Попробуйте другое слово",
+		searchPlaceholder: "Поиск",
+		searchTitle: "Поиск по названиям",
+		searchFull: "Поиск по тексту",
+		searching: "Поиск",
+		hitCount: "результатов",
+		newNote: "Новая заметка",
+		newFolder: "Новая папка",
+		editOrder: "Порядок",
+		sortTitle: "Сортировка",
+		moved: "Перемещено",
+		renamed: "Переименовано",
+		created: "Создано",
+		cantUseView: "В «Недавних» и «Всех» нельзя создавать",
+		createFailed: "Не удалось создать",
+		renameFailed: "Не удалось переименовать",
+		moveFailed: "Не удалось переместить",
+		cantMoveIntoSelf: "Папку нельзя переместить в себя",
+		nameAsc: "Имя, А до Я",
+		nameDesc: "Имя, Я до А",
+		mtimeDesc: "Изменено, новые сверху",
+		mtimeAsc: "Изменено, старые сверху",
+		ctimeDesc: "Создано, новые сверху",
+		ctimeAsc: "Создано, старые сверху",
+		ribbonOpen: "Открыть Manager",
+		ribbonSettings: "Открыть настройки",
+		cmdOpen: "Открыть Manager",
+		setBlocked: "Скрытые папки",
+		setEmptyFolders: "Показывать пустые папки",
+		setRecent: "Показывать «Недавние»",
+		setAll: "Показывать «Все»",
+		setSettingsIcon: "Значок настроек в панели",
+		setHomePage: "Открывать при запуске",
+		setAnimations: "Анимации интерфейса",
+		setCollapse: "Сворачивать левую панель",
+		mapMode: "Вид карты",
+		mapDynamic: "Анимированный",
+		mapStatic: "Статический",
+		mapTitle: "Структура заметок",
+		mapRibbon: "Открыть структуру заметок",
+		setMapIcon: "Значок структуры в панели",
+		showSize: "Показывать размер",
+		showTime: "Показывать время",
+		density: "Плотность",
+		dCompact: "Плотная",
+		dNormal: "Обычная",
+		dComfortable: "Просторная",
+		sizeDesc: "Размер, от большего",
+		kbMode: "Режим клавиатуры",
+		setSupport: "Поддержать автора — WeChat QR",
+	},
+	it: {
+		root: "Radice",
+		recent: "Recenti",
+		all: "Tutti",
+		untitled: "Senza titolo",
+		untitledFolder: "Cartella senza titolo",
+		empty: "Qui non c'è ancora nulla",
+		emptyHint: "Crea una nota con +",
+		emptySearch: "Nessun file trovato",
+		emptySearchHint: "Prova un'altra parola",
+		searchPlaceholder: "Cerca",
+		searchTitle: "Cerca nei titoli",
+		searchFull: "Cerca nel testo",
+		searching: "Ricerca",
+		hitCount: "risultati",
+		newNote: "Nuova nota",
+		newFolder: "Nuova cartella",
+		editOrder: "Riordina",
+		sortTitle: "Ordina file",
+		moved: "Spostato",
+		renamed: "Rinominato",
+		created: "Creato",
+		cantUseView: "Non si può creare in Recenti o Tutti",
+		createFailed: "Creazione non riuscita",
+		renameFailed: "Rinomina non riuscita",
+		moveFailed: "Spostamento non riuscito",
+		cantMoveIntoSelf: "Una cartella non può essere spostata dentro se stessa",
+		nameAsc: "Nome, A a Z",
+		nameDesc: "Nome, Z a A",
+		mtimeDesc: "Modificato, recenti prima",
+		mtimeAsc: "Modificato, vecchi prima",
+		ctimeDesc: "Creato, recenti prima",
+		ctimeAsc: "Creato, vecchi prima",
+		ribbonOpen: "Apri Manager",
+		ribbonSettings: "Apri impostazioni",
+		cmdOpen: "Apri Manager",
+		setBlocked: "Cartelle nascoste",
+		setEmptyFolders: "Mostra cartelle vuote",
+		setRecent: "Mostra Recenti",
+		setAll: "Mostra Tutti",
+		setSettingsIcon: "Icona impostazioni nella barra",
+		setHomePage: "Apri all'avvio",
+		setAnimations: "Animazioni dell'interfaccia",
+		setCollapse: "Comprimi la barra laterale",
+		mapMode: "Stile mappa",
+		mapDynamic: "Animata",
+		mapStatic: "Statica",
+		mapTitle: "Struttura delle note",
+		mapRibbon: "Apri la struttura delle note",
+		setMapIcon: "Icona struttura nella barra",
+		showSize: "Mostra dimensione",
+		showTime: "Mostra data",
+		density: "Densità",
+		dCompact: "Compatta",
+		dNormal: "Normale",
+		dComfortable: "Ampia",
+		sizeDesc: "Dimensione, dal più grande",
+		kbMode: "Modalità tastiera",
+		setSupport: "Sostieni l'autore - QR WeChat",
+	},
+	pt: {
+		root: "Raiz",
+		recent: "Recentes",
+		all: "Tudo",
+		untitled: "Sem título",
+		untitledFolder: "Pasta sem título",
+		empty: "Ainda não há nada aqui",
+		emptyHint: "Crie uma nota com +",
+		emptySearch: "Nenhum ficheiro encontrado",
+		emptySearchHint: "Tente outra palavra",
+		searchPlaceholder: "Pesquisar",
+		searchTitle: "Pesquisar títulos",
+		searchFull: "Pesquisar no texto",
+		searching: "A pesquisar",
+		hitCount: "resultados",
+		newNote: "Nova nota",
+		newFolder: "Nova pasta",
+		editOrder: "Reordenar",
+		sortTitle: "Ordenar ficheiros",
+		moved: "Movido",
+		renamed: "Renomeado",
+		created: "Criado",
+		cantUseView: "Não é possível criar em Recentes ou Tudo",
+		createFailed: "Não foi possível criar",
+		renameFailed: "Não foi possível renomear",
+		moveFailed: "Não foi possível mover",
+		cantMoveIntoSelf: "Uma pasta não pode ser movida para dentro de si mesma",
+		nameAsc: "Nome, A a Z",
+		nameDesc: "Nome, Z a A",
+		mtimeDesc: "Modificado, recentes primeiro",
+		mtimeAsc: "Modificado, antigos primeiro",
+		ctimeDesc: "Criado, recentes primeiro",
+		ctimeAsc: "Criado, antigos primeiro",
+		ribbonOpen: "Abrir Manager",
+		ribbonSettings: "Abrir definições",
+		cmdOpen: "Abrir Manager",
+		setBlocked: "Pastas ocultas",
+		setEmptyFolders: "Mostrar pastas vazias",
+		setRecent: "Mostrar Recentes",
+		setAll: "Mostrar Tudo",
+		setSettingsIcon: "Ícone de definições na barra",
+		setHomePage: "Abrir ao iniciar",
+		setAnimations: "Animações da interface",
+		setCollapse: "Recolher barra lateral",
+		mapMode: "Estilo do mapa",
+		mapDynamic: "Animado",
+		mapStatic: "Estático",
+		mapTitle: "Estrutura das notas",
+		mapRibbon: "Abrir estrutura das notas",
+		setMapIcon: "Ícone de estrutura na barra",
+		showSize: "Mostrar tamanho",
+		showTime: "Mostrar data",
+		density: "Densidade",
+		dCompact: "Compacta",
+		dNormal: "Normal",
+		dComfortable: "Ampla",
+		sizeDesc: "Tamanho, maior primeiro",
+		kbMode: "Modo teclado",
+		setSupport: "Apoiar o autor - QR WeChat",
+	},
+	"pt-BR": {
+		root: "Raiz",
+		recent: "Recentes",
+		all: "Tudo",
+		untitled: "Sem título",
+		untitledFolder: "Pasta sem título",
+		empty: "Ainda não há nada aqui",
+		emptyHint: "Crie uma nota com +",
+		emptySearch: "Nenhum arquivo encontrado",
+		emptySearchHint: "Tente outra palavra",
+		searchPlaceholder: "Pesquisar",
+		searchTitle: "Pesquisar títulos",
+		searchFull: "Pesquisar no texto",
+		searching: "Pesquisando",
+		hitCount: "resultados",
+		newNote: "Nova nota",
+		newFolder: "Nova pasta",
+		editOrder: "Reordenar",
+		sortTitle: "Ordenar arquivos",
+		moved: "Movido",
+		renamed: "Renomeado",
+		created: "Criado",
+		cantUseView: "Não é possível criar em Recentes ou Tudo",
+		createFailed: "Não foi possível criar",
+		renameFailed: "Não foi possível renomear",
+		moveFailed: "Não foi possível mover",
+		cantMoveIntoSelf: "Uma pasta não pode ser movida para dentro de si mesma",
+		nameAsc: "Nome, A a Z",
+		nameDesc: "Nome, Z a A",
+		mtimeDesc: "Modificado, recentes primeiro",
+		mtimeAsc: "Modificado, antigos primeiro",
+		ctimeDesc: "Criado, recentes primeiro",
+		ctimeAsc: "Criado, antigos primeiro",
+		ribbonOpen: "Abrir Manager",
+		ribbonSettings: "Abrir configurações",
+		cmdOpen: "Abrir Manager",
+		setBlocked: "Pastas ocultas",
+		setEmptyFolders: "Mostrar pastas vazias",
+		setRecent: "Mostrar Recentes",
+		setAll: "Mostrar Tudo",
+		setSettingsIcon: "Ícone de ajustes na barra",
+		setHomePage: "Abrir ao iniciar",
+		setAnimations: "Animações da interface",
+		setCollapse: "Recolher barra lateral",
+		mapMode: "Estilo do mapa",
+		mapDynamic: "Animado",
+		mapStatic: "Estático",
+		mapTitle: "Estrutura das notas",
+		mapRibbon: "Abrir estrutura das notas",
+		setMapIcon: "Ícone de estrutura na barra",
+		showSize: "Mostrar tamanho",
+		showTime: "Mostrar data",
+		density: "Densidade",
+		dCompact: "Compacta",
+		dNormal: "Normal",
+		dComfortable: "Ampla",
+		sizeDesc: "Tamanho, maior primeiro",
+		kbMode: "Modo teclado",
+		setSupport: "Apoiar o autor - QR WeChat",
+	},
+	pl: {
+		root: "Katalog główny",
+		recent: "Ostatnie",
+		all: "Wszystkie",
+		untitled: "Bez nazwy",
+		untitledFolder: "Folder bez nazwy",
+		empty: "Nic tu jeszcze nie ma",
+		emptyHint: "Utwórz notatkę przyciskiem +",
+		emptySearch: "Brak pasujących plików",
+		emptySearchHint: "Spróbuj innego słowa",
+		searchPlaceholder: "Szukaj",
+		searchTitle: "Szukaj w nazwach",
+		searchFull: "Szukaj w treści",
+		searching: "Szukanie",
+		hitCount: "wyników",
+		newNote: "Nowa notatka",
+		newFolder: "Nowy folder",
+		editOrder: "Kolejność",
+		sortTitle: "Sortuj pliki",
+		moved: "Przeniesiono",
+		renamed: "Zmieniono nazwę",
+		created: "Utworzono",
+		cantUseView: "W Ostatnich i Wszystkich nie można tworzyć",
+		createFailed: "Nie udało się utworzyć",
+		renameFailed: "Nie udało się zmienić nazwy",
+		moveFailed: "Nie udało się przenieść",
+		cantMoveIntoSelf: "Folderu nie można przenieść do niego samego",
+		nameAsc: "Nazwa, A do Z",
+		nameDesc: "Nazwa, Z do A",
+		mtimeDesc: "Zmodyfikowane, najnowsze",
+		mtimeAsc: "Zmodyfikowane, najstarsze",
+		ctimeDesc: "Utworzone, najnowsze",
+		ctimeAsc: "Utworzone, najstarsze",
+		ribbonOpen: "Otwórz Manager",
+		ribbonSettings: "Otwórz ustawienia",
+		cmdOpen: "Otwórz Manager",
+		setBlocked: "Ukryte foldery",
+		setEmptyFolders: "Pokazuj puste foldery",
+		setRecent: "Pokazuj Ostatnie",
+		setAll: "Pokazuj Wszystkie",
+		setSettingsIcon: "Ikona ustawień na pasku",
+		setHomePage: "Otwieraj przy starcie",
+		setAnimations: "Animacje interfejsu",
+		setCollapse: "Zwijać lewy panel",
+		mapMode: "Styl mapy",
+		mapDynamic: "Animowana",
+		mapStatic: "Statyczna",
+		mapTitle: "Struktura notatek",
+		mapRibbon: "Otwórz strukturę notatek",
+		setMapIcon: "Ikona struktury na pasku",
+		showSize: "Pokazuj rozmiar",
+		showTime: "Pokazuj czas",
+		density: "Gęstość",
+		dCompact: "Ciasna",
+		dNormal: "Zwykła",
+		dComfortable: "Luźna",
+		sizeDesc: "Rozmiar, od największego",
+		kbMode: "Tryb klawiatury",
+		setSupport: "Wesprzyj autora - QR WeChat",
+	},
+	nl: {
+		root: "Hoofdmap",
+		recent: "Recent",
+		all: "Alles",
+		untitled: "Naamloos",
+		untitledFolder: "Naamloze map",
+		empty: "Hier is nog niets",
+		emptyHint: "Maak een notitie met +",
+		emptySearch: "Geen bestanden gevonden",
+		emptySearchHint: "Probeer een ander woord",
+		searchPlaceholder: "Zoeken",
+		searchTitle: "Zoek in titels",
+		searchFull: "Zoek in tekst",
+		searching: "Zoeken",
+		hitCount: "resultaten",
+		newNote: "Nieuwe notitie",
+		newFolder: "Nieuwe map",
+		editOrder: "Volgorde",
+		sortTitle: "Bestanden sorteren",
+		moved: "Verplaatst",
+		renamed: "Hernoemd",
+		created: "Aangemaakt",
+		cantUseView: "In Recent en Alles kun je niets aanmaken",
+		createFailed: "Aanmaken mislukt",
+		renameFailed: "Hernoemen mislukt",
+		moveFailed: "Verplaatsen mislukt",
+		cantMoveIntoSelf: "Een map kan niet in zichzelf worden verplaatst",
+		nameAsc: "Naam, A tot Z",
+		nameDesc: "Naam, Z tot A",
+		mtimeDesc: "Gewijzigd, nieuwste eerst",
+		mtimeAsc: "Gewijzigd, oudste eerst",
+		ctimeDesc: "Aangemaakt, nieuwste eerst",
+		ctimeAsc: "Aangemaakt, oudste eerst",
+		ribbonOpen: "Manager openen",
+		ribbonSettings: "Instellingen openen",
+		cmdOpen: "Manager openen",
+		setBlocked: "Verborgen mappen",
+		setEmptyFolders: "Lege mappen tonen",
+		setRecent: "Recent tonen",
+		setAll: "Alles tonen",
+		setSettingsIcon: "Tandwiel in de zijbalk",
+		setHomePage: "Openen bij starten",
+		setAnimations: "Interface-animaties",
+		setCollapse: "Linkerzijbalk inklappen",
+		mapMode: "Kaartstijl",
+		mapDynamic: "Bewegend",
+		mapStatic: "Statisch",
+		mapTitle: "Notitiestructuur",
+		mapRibbon: "Notitiestructuur openen",
+		setMapIcon: "Structuurpictogram in de zijbalk",
+		showSize: "Grootte tonen",
+		showTime: "Tijd tonen",
+		density: "Dichtheid",
+		dCompact: "Compact",
+		dNormal: "Normaal",
+		dComfortable: "Ruim",
+		sizeDesc: "Grootte, grootste eerst",
+		kbMode: "Toetsenbordmodus",
+		setSupport: "Auteur steunen - WeChat-QR",
+	},
+	tr: {
+		root: "Kök",
+		recent: "Son",
+		all: "Tümü",
+		untitled: "Başlıksız",
+		untitledFolder: "Başlıksız klasör",
+		empty: "Burada henüz bir şey yok",
+		emptyHint: "+ ile not oluştur",
+		emptySearch: "Eşleşen dosya yok",
+		emptySearchHint: "Başka bir kelime dene",
+		searchPlaceholder: "Ara",
+		searchTitle: "Başlıklarda ara",
+		searchFull: "Metinde ara",
+		searching: "Aranıyor",
+		hitCount: "sonuç",
+		newNote: "Yeni not",
+		newFolder: "Yeni klasör",
+		editOrder: "Sırala",
+		sortTitle: "Dosyaları sırala",
+		moved: "Taşındı",
+		renamed: "Yeniden adlandırıldı",
+		created: "Oluşturuldu",
+		cantUseView: "Son ve Tümü içinde oluşturulamaz",
+		createFailed: "Oluşturulamadı",
+		renameFailed: "Adlandırılamadı",
+		moveFailed: "Taşınamadı",
+		cantMoveIntoSelf: "Bir klasör kendi içine taşınamaz",
+		nameAsc: "Ad, A dan Z",
+		nameDesc: "Ad, Z den A",
+		mtimeDesc: "Değişti, yeniler önce",
+		mtimeAsc: "Değişti, eskiler önce",
+		ctimeDesc: "Oluşturuldu, yeniler önce",
+		ctimeAsc: "Oluşturuldu, eskiler önce",
+		ribbonOpen: "Manager'ı aç",
+		ribbonSettings: "Ayarları aç",
+		cmdOpen: "Manager'ı aç",
+		setBlocked: "Gizli klasörler",
+		setEmptyFolders: "Boş klasörleri göster",
+		setRecent: "Son'u göster",
+		setAll: "Tümü'nü göster",
+		setSettingsIcon: "Kenar çubuğunda ayar simgesi",
+		setHomePage: "Açılışta aç",
+		setAnimations: "Arayüz animasyonları",
+		setCollapse: "Sol çubuğu daralt",
+		mapMode: "Harita stili",
+		mapDynamic: "Hareketli",
+		mapStatic: "Durağan",
+		mapTitle: "Not yapısı",
+		mapRibbon: "Not yapısını aç",
+		setMapIcon: "Kenar çubuğunda yapı simgesi",
+		showSize: "Boyutu göster",
+		showTime: "Zamanı göster",
+		density: "Yoğunluk",
+		dCompact: "Sıkı",
+		dNormal: "Normal",
+		dComfortable: "Ferah",
+		sizeDesc: "Boyut, en büyük önce",
+		kbMode: "Klavye modu",
+		setSupport: "Yazarı destekle - WeChat QR",
+	},
+	uk: {
+		root: "Корінь",
+		recent: "Нещодавні",
+		all: "Усі",
+		untitled: "Без назви",
+		untitledFolder: "Папка без назви",
+		empty: "Тут поки нічого немає",
+		emptyHint: "Створіть нотатку кнопкою +",
+		emptySearch: "Нічого не знайдено",
+		emptySearchHint: "Спробуйте інше слово",
+		searchPlaceholder: "Пошук",
+		searchTitle: "Пошук за назвами",
+		searchFull: "Пошук у тексті",
+		searching: "Пошук",
+		hitCount: "результатів",
+		newNote: "Нова нотатка",
+		newFolder: "Нова папка",
+		editOrder: "Порядок",
+		sortTitle: "Сортування",
+		moved: "Переміщено",
+		renamed: "Перейменовано",
+		created: "Створено",
+		cantUseView: "У «Нещодавніх» і «Усіх» не можна створювати",
+		createFailed: "Не вдалося створити",
+		renameFailed: "Не вдалося перейменувати",
+		moveFailed: "Не вдалося перемістити",
+		cantMoveIntoSelf: "Папку не можна перемістити в саму себе",
+		nameAsc: "Назва, А до Я",
+		nameDesc: "Назва, Я до А",
+		mtimeDesc: "Змінено, новіші",
+		mtimeAsc: "Змінено, старіші",
+		ctimeDesc: "Створено, новіші",
+		ctimeAsc: "Створено, старіші",
+		ribbonOpen: "Відкрити Manager",
+		ribbonSettings: "Відкрити налаштування",
+		cmdOpen: "Відкрити Manager",
+		setBlocked: "Приховані папки",
+		setEmptyFolders: "Показувати порожні папки",
+		setRecent: "Показувати «Нещодавні»",
+		setAll: "Показувати «Усі»",
+		setSettingsIcon: "Значок налаштувань у панелі",
+		setHomePage: "Відкривати під час запуску",
+		setAnimations: "Анімації інтерфейсу",
+		setCollapse: "Згортати ліву панель",
+		mapMode: "Стиль мапи",
+		mapDynamic: "Анімована",
+		mapStatic: "Статична",
+		mapTitle: "Структура нотаток",
+		mapRibbon: "Відкрити структуру нотаток",
+		setMapIcon: "Значок структури в панелі",
+		showSize: "Показувати розмір",
+		showTime: "Показувати час",
+		density: "Щільність",
+		dCompact: "Щільна",
+		dNormal: "Звичайна",
+		dComfortable: "Простора",
+		sizeDesc: "Розмір, від більшого",
+		kbMode: "Режим клавіатури",
+		setSupport: "Підтримати автора - WeChat QR",
+	},
+	id: {
+		root: "Akar",
+		recent: "Terbaru",
+		all: "Semua",
+		untitled: "Tanpa judul",
+		untitledFolder: "Folder tanpa judul",
+		empty: "Belum ada apa pun di sini",
+		emptyHint: "Buat catatan dengan +",
+		emptySearch: "Tidak ada berkas cocok",
+		emptySearchHint: "Coba kata lain",
+		searchPlaceholder: "Cari",
+		searchTitle: "Cari di judul",
+		searchFull: "Cari di teks",
+		searching: "Mencari",
+		hitCount: "hasil",
+		newNote: "Catatan baru",
+		newFolder: "Folder baru",
+		editOrder: "Urutkan",
+		sortTitle: "Urutkan berkas",
+		moved: "Dipindahkan",
+		renamed: "Diganti nama",
+		created: "Dibuat",
+		cantUseView: "Tidak bisa membuat di Terbaru atau Semua",
+		createFailed: "Gagal membuat",
+		renameFailed: "Gagal mengganti nama",
+		moveFailed: "Gagal memindahkan",
+		cantMoveIntoSelf: "Folder tidak bisa dipindah ke dalam dirinya sendiri",
+		nameAsc: "Nama, A ke Z",
+		nameDesc: "Nama, Z ke A",
+		mtimeDesc: "Diubah, terbaru dulu",
+		mtimeAsc: "Diubah, terlama dulu",
+		ctimeDesc: "Dibuat, terbaru dulu",
+		ctimeAsc: "Dibuat, terlama dulu",
+		ribbonOpen: "Buka Manager",
+		ribbonSettings: "Buka pengaturan",
+		cmdOpen: "Buka Manager",
+		setBlocked: "Folder disembunyikan",
+		setEmptyFolders: "Tampilkan folder kosong",
+		setRecent: "Tampilkan Terbaru",
+		setAll: "Tampilkan Semua",
+		setSettingsIcon: "Ikon pengaturan di bilah samping",
+		setHomePage: "Buka saat mulai",
+		setAnimations: "Animasi antarmuka",
+		setCollapse: "Ciutkan bilah kiri",
+		mapMode: "Gaya peta",
+		mapDynamic: "Bergerak",
+		mapStatic: "Statis",
+		mapTitle: "Struktur catatan",
+		mapRibbon: "Buka struktur catatan",
+		setMapIcon: "Ikon struktur di bilah samping",
+		showSize: "Tampilkan ukuran",
+		showTime: "Tampilkan waktu",
+		density: "Kerapatan",
+		dCompact: "Rapat",
+		dNormal: "Normal",
+		dComfortable: "Lega",
+		sizeDesc: "Ukuran, terbesar dulu",
+		kbMode: "Mode papan ketik",
+		setSupport: "Dukung penulis - QR WeChat",
+	},
+	vi: {
+		root: "Gốc",
+		recent: "Gần đây",
+		all: "Tất cả",
+		untitled: "Chưa đặt tên",
+		untitledFolder: "Thư mục chưa đặt tên",
+		empty: "Chưa có gì ở đây",
+		emptyHint: "Tạo ghi chú bằng nút +",
+		emptySearch: "Không có tệp nào khớp",
+		emptySearchHint: "Thử từ khác",
+		searchPlaceholder: "Tìm kiếm",
+		searchTitle: "Tìm theo tiêu đề",
+		searchFull: "Tìm trong nội dung",
+		searching: "Đang tìm",
+		hitCount: "kết quả",
+		newNote: "Ghi chú mới",
+		newFolder: "Thư mục mới",
+		editOrder: "Sắp xếp",
+		sortTitle: "Sắp xếp tệp",
+		moved: "Đã chuyển",
+		renamed: "Đã đổi tên",
+		created: "Đã tạo",
+		cantUseView: "Không thể tạo trong Gần đây hoặc Tất cả",
+		createFailed: "Không tạo được",
+		renameFailed: "Không đổi tên được",
+		moveFailed: "Không chuyển được",
+		cantMoveIntoSelf: "Không thể chuyển thư mục vào chính nó",
+		nameAsc: "Tên, A đến Z",
+		nameDesc: "Tên, Z đến A",
+		mtimeDesc: "Đã sửa, mới nhất trước",
+		mtimeAsc: "Đã sửa, cũ nhất trước",
+		ctimeDesc: "Đã tạo, mới nhất trước",
+		ctimeAsc: "Đã tạo, cũ nhất trước",
+		ribbonOpen: "Mở Manager",
+		ribbonSettings: "Mở cài đặt",
+		cmdOpen: "Mở Manager",
+		setBlocked: "Thư mục ẩn",
+		setEmptyFolders: "Hiện thư mục trống",
+		setRecent: "Hiện Gần đây",
+		setAll: "Hiện Tất cả",
+		setSettingsIcon: "Biểu tượng cài đặt ở thanh bên",
+		setHomePage: "Mở khi khởi động",
+		setAnimations: "Hiệu ứng giao diện",
+		setCollapse: "Thu gọn thanh bên trái",
+		mapMode: "Kiểu bản đồ",
+		mapDynamic: "Chuyển động",
+		mapStatic: "Tĩnh",
+		mapTitle: "Cấu trúc ghi chú",
+		mapRibbon: "Mở cấu trúc ghi chú",
+		setMapIcon: "Biểu tượng cấu trúc ở thanh bên",
+		showSize: "Hiện kích thước",
+		showTime: "Hiện thời gian",
+		density: "Mật độ",
+		dCompact: "Chặt",
+		dNormal: "Thường",
+		dComfortable: "Thoáng",
+		sizeDesc: "Kích thước, lớn nhất trước",
+		kbMode: "Chế độ bàn phím",
+		setSupport: "Ủng hộ tác giả - QR WeChat",
+	},
+	sv: {
+		root: "Rot",
+		recent: "Senaste",
+		all: "Alla",
+		untitled: "Namnlös",
+		untitledFolder: "Namnlös mapp",
+		empty: "Inget här än",
+		emptyHint: "Skapa en anteckning med +",
+		emptySearch: "Inga filer matchar",
+		emptySearchHint: "Prova ett annat ord",
+		searchPlaceholder: "Sök",
+		searchTitle: "Sök i titlar",
+		searchFull: "Sök i text",
+		searching: "Söker",
+		hitCount: "träffar",
+		newNote: "Ny anteckning",
+		newFolder: "Ny mapp",
+		editOrder: "Ordna",
+		sortTitle: "Sortera filer",
+		moved: "Flyttad",
+		renamed: "Omdöpt",
+		created: "Skapad",
+		cantUseView: "Kan inte skapa i Senaste eller Alla",
+		createFailed: "Kunde inte skapa",
+		renameFailed: "Kunde inte byta namn",
+		moveFailed: "Kunde inte flytta",
+		cantMoveIntoSelf: "En mapp kan inte flyttas in i sig själv",
+		nameAsc: "Namn, A till Ö",
+		nameDesc: "Namn, Ö till A",
+		mtimeDesc: "Ändrad, nyast först",
+		mtimeAsc: "Ändrad, äldst först",
+		ctimeDesc: "Skapad, nyast först",
+		ctimeAsc: "Skapad, äldst först",
+		ribbonOpen: "Öppna Manager",
+		ribbonSettings: "Öppna inställningar",
+		cmdOpen: "Öppna Manager",
+		setBlocked: "Dolda mappar",
+		setEmptyFolders: "Visa tomma mappar",
+		setRecent: "Visa Senaste",
+		setAll: "Visa Alla",
+		setSettingsIcon: "Kugghjul i sidopanelen",
+		setHomePage: "Öppna vid start",
+		setAnimations: "Gränssnittsanimationer",
+		setCollapse: "Fäll in vänsterpanelen",
+		mapMode: "Kartstil",
+		mapDynamic: "Rörlig",
+		mapStatic: "Statisk",
+		mapTitle: "Anteckningsstruktur",
+		mapRibbon: "Öppna anteckningsstruktur",
+		setMapIcon: "Strukturikon i sidopanelen",
+		showSize: "Visa storlek",
+		showTime: "Visa tid",
+		density: "Täthet",
+		dCompact: "Tät",
+		dNormal: "Normal",
+		dComfortable: "Luftig",
+		sizeDesc: "Storlek, störst först",
+		kbMode: "Tangentbordsläge",
+		setSupport: "Stöd författaren - WeChat-QR",
+	},
+	da: {
+		root: "Rod",
+		recent: "Seneste",
+		all: "Alle",
+		untitled: "Uden navn",
+		untitledFolder: "Mappe uden navn",
+		empty: "Der er intet her endnu",
+		emptyHint: "Opret en note med +",
+		emptySearch: "Ingen filer matcher",
+		emptySearchHint: "Prøv et andet ord",
+		searchPlaceholder: "Søg",
+		searchTitle: "Søg i titler",
+		searchFull: "Søg i tekst",
+		searching: "Søger",
+		hitCount: "resultater",
+		newNote: "Ny note",
+		newFolder: "Ny mappe",
+		editOrder: "Sorter",
+		sortTitle: "Sorter filer",
+		moved: "Flyttet",
+		renamed: "Omdøbt",
+		created: "Oprettet",
+		cantUseView: "Kan ikke oprette i Seneste eller Alle",
+		createFailed: "Kunne ikke oprette",
+		renameFailed: "Kunne ikke omdøbe",
+		moveFailed: "Kunne ikke flytte",
+		cantMoveIntoSelf: "En mappe kan ikke flyttes ind i sig selv",
+		nameAsc: "Navn, A til Å",
+		nameDesc: "Navn, Å til A",
+		mtimeDesc: "Ændret, nyeste først",
+		mtimeAsc: "Ændret, ældste først",
+		ctimeDesc: "Oprettet, nyeste først",
+		ctimeAsc: "Oprettet, ældste først",
+		ribbonOpen: "Åbn Manager",
+		ribbonSettings: "Åbn indstillinger",
+		cmdOpen: "Åbn Manager",
+		setBlocked: "Skjulte mapper",
+		setEmptyFolders: "Vis tomme mapper",
+		setRecent: "Vis Seneste",
+		setAll: "Vis Alle",
+		setSettingsIcon: "Tandhjul i sidepanelet",
+		setHomePage: "Åbn ved start",
+		setAnimations: "Grænsefladeanimationer",
+		setCollapse: "Klap venstre panel ind",
+		mapMode: "Kortstil",
+		mapDynamic: "Levende",
+		mapStatic: "Statisk",
+		mapTitle: "Notestruktur",
+		mapRibbon: "Åbn notestruktur",
+		setMapIcon: "Strukturikon i sidepanelet",
+		showSize: "Vis størrelse",
+		showTime: "Vis tid",
+		density: "Tæthed",
+		dCompact: "Tæt",
+		dNormal: "Normal",
+		dComfortable: "Luftig",
+		sizeDesc: "Størrelse, størst først",
+		kbMode: "Tastaturtilstand",
+		setSupport: "Støt forfatteren - WeChat-QR",
+	},
+	no: {
+		root: "Rot",
+		recent: "Nylige",
+		all: "Alle",
+		untitled: "Uten navn",
+		untitledFolder: "Mappe uten navn",
+		empty: "Det er ingenting her ennå",
+		emptyHint: "Lag et notat med +",
+		emptySearch: "Ingen filer samsvarer",
+		emptySearchHint: "Prøv et annet ord",
+		searchPlaceholder: "Søk",
+		searchTitle: "Søk i titler",
+		searchFull: "Søk i tekst",
+		searching: "Søker",
+		hitCount: "treff",
+		newNote: "Nytt notat",
+		newFolder: "Ny mappe",
+		editOrder: "Sorter",
+		sortTitle: "Sorter filer",
+		moved: "Flyttet",
+		renamed: "Nytt navn",
+		created: "Opprettet",
+		cantUseView: "Kan ikke opprette i Nylige eller Alle",
+		createFailed: "Kunne ikke opprette",
+		renameFailed: "Kunne ikke gi nytt navn",
+		moveFailed: "Kunne ikke flytte",
+		cantMoveIntoSelf: "En mappe kan ikke flyttes inn i seg selv",
+		nameAsc: "Navn, A til Å",
+		nameDesc: "Navn, Å til A",
+		mtimeDesc: "Endret, nyeste først",
+		mtimeAsc: "Endret, eldste først",
+		ctimeDesc: "Opprettet, nyeste først",
+		ctimeAsc: "Opprettet, eldste først",
+		ribbonOpen: "Åpne Manager",
+		ribbonSettings: "Åpne innstillinger",
+		cmdOpen: "Åpne Manager",
+		setBlocked: "Skjulte mapper",
+		setEmptyFolders: "Vis tomme mapper",
+		setRecent: "Vis Nylige",
+		setAll: "Vis Alle",
+		setSettingsIcon: "Tannhjul i sidepanelet",
+		setHomePage: "Åpne ved start",
+		setAnimations: "Grensesnittanimasjoner",
+		setCollapse: "Fold inn venstre panel",
+		mapMode: "Kartstil",
+		mapDynamic: "Levende",
+		mapStatic: "Statisk",
+		mapTitle: "Notatstruktur",
+		mapRibbon: "Åpne notatstruktur",
+		setMapIcon: "Strukturikon i sidepanelet",
+		showSize: "Vis størrelse",
+		showTime: "Vis tid",
+		density: "Tetthet",
+		dCompact: "Tett",
+		dNormal: "Normal",
+		dComfortable: "Luftig",
+		sizeDesc: "Størrelse, størst først",
+		kbMode: "Tastaturmodus",
+		setSupport: "Støtt forfatteren - WeChat-QR",
+	},
+	fi: {
+		root: "Juuri",
+		recent: "Viimeisimmät",
+		all: "Kaikki",
+		untitled: "Nimetön",
+		untitledFolder: "Nimetön kansio",
+		empty: "Täällä ei ole vielä mitään",
+		emptyHint: "Luo muistiinpano + -painikkeella",
+		emptySearch: "Ei osumia",
+		emptySearchHint: "Kokeile toista sanaa",
+		searchPlaceholder: "Haku",
+		searchTitle: "Hae otsikoista",
+		searchFull: "Hae tekstistä",
+		searching: "Haetaan",
+		hitCount: "osumaa",
+		newNote: "Uusi muistiinpano",
+		newFolder: "Uusi kansio",
+		editOrder: "Järjestä",
+		sortTitle: "Lajittele tiedostot",
+		moved: "Siirretty",
+		renamed: "Nimetty uudelleen",
+		created: "Luotu",
+		cantUseView: "Viimeisimmissä ja Kaikissa ei voi luoda",
+		createFailed: "Luonti epäonnistui",
+		renameFailed: "Uudelleennimeäminen epäonnistui",
+		moveFailed: "Siirto epäonnistui",
+		cantMoveIntoSelf: "Kansiota ei voi siirtää itseensä",
+		nameAsc: "Nimi, A–Ö",
+		nameDesc: "Nimi, Ö–A",
+		mtimeDesc: "Muokattu, uusin ensin",
+		mtimeAsc: "Muokattu, vanhin ensin",
+		ctimeDesc: "Luotu, uusin ensin",
+		ctimeAsc: "Luotu, vanhin ensin",
+		ribbonOpen: "Avaa Manager",
+		ribbonSettings: "Avaa asetukset",
+		cmdOpen: "Avaa Manager",
+		setBlocked: "Piilotetut kansiot",
+		setEmptyFolders: "Näytä tyhjät kansiot",
+		setRecent: "Näytä Viimeisimmät",
+		setAll: "Näytä Kaikki",
+		setSettingsIcon: "Asetuskuvake sivupalkissa",
+		setHomePage: "Avaa käynnistyksessä",
+		setAnimations: "Käyttöliittymän animaatiot",
+		setCollapse: "Pienennä vasen paneeli",
+		mapMode: "Kartan tyyli",
+		mapDynamic: "Liikkuva",
+		mapStatic: "Staattinen",
+		mapTitle: "Muistiinpanojen rakenne",
+		mapRibbon: "Avaa muistiinpanojen rakenne",
+		setMapIcon: "Rakennekuvake sivupalkissa",
+		showSize: "Näytä koko",
+		showTime: "Näytä aika",
+		density: "Tiheys",
+		dCompact: "Tiivis",
+		dNormal: "Normaali",
+		dComfortable: "Väljä",
+		sizeDesc: "Koko, suurin ensin",
+		kbMode: "Näppäimistötila",
+		setSupport: "Tue tekijää - WeChat-QR",
+	},
+	cs: {
+		root: "Kořen",
+		recent: "Nedávné",
+		all: "Vše",
+		untitled: "Bez názvu",
+		untitledFolder: "Složka bez názvu",
+		empty: "Zatím tu nic není",
+		emptyHint: "Vytvořte poznámku tlačítkem +",
+		emptySearch: "Žádné soubory neodpovídají",
+		emptySearchHint: "Zkuste jiné slovo",
+		searchPlaceholder: "Hledat",
+		searchTitle: "Hledat v názvech",
+		searchFull: "Hledat v textu",
+		searching: "Hledání",
+		hitCount: "výsledků",
+		newNote: "Nová poznámka",
+		newFolder: "Nová složka",
+		editOrder: "Pořadí",
+		sortTitle: "Seřadit soubory",
+		moved: "Přesunuto",
+		renamed: "Přejmenováno",
+		created: "Vytvořeno",
+		cantUseView: "V Nedávných a Všem nelze vytvářet",
+		createFailed: "Vytvoření se nezdařilo",
+		renameFailed: "Přejmenování se nezdařilo",
+		moveFailed: "Přesun se nezdařil",
+		cantMoveIntoSelf: "Složku nelze přesunout do ní samé",
+		nameAsc: "Název, A do Z",
+		nameDesc: "Název, Z do A",
+		mtimeDesc: "Změněno, nejnovější první",
+		mtimeAsc: "Změněno, nejstarší první",
+		ctimeDesc: "Vytvořeno, nejnovější první",
+		ctimeAsc: "Vytvořeno, nejstarší první",
+		ribbonOpen: "Otevřít Manager",
+		ribbonSettings: "Otevřít nastavení",
+		cmdOpen: "Otevřít Manager",
+		setBlocked: "Skryté složky",
+		setEmptyFolders: "Zobrazit prázdné složky",
+		setRecent: "Zobrazit Nedávné",
+		setAll: "Zobrazit Vše",
+		setSettingsIcon: "Ikona nastavení v panelu",
+		setHomePage: "Otevřít při spuštění",
+		setAnimations: "Animace rozhraní",
+		setCollapse: "Sbalit levý panel",
+		mapMode: "Styl mapy",
+		mapDynamic: "Pohyblivá",
+		mapStatic: "Statická",
+		mapTitle: "Struktura poznámek",
+		mapRibbon: "Otevřít strukturu poznámek",
+		setMapIcon: "Ikona struktury v panelu",
+		showSize: "Zobrazit velikost",
+		showTime: "Zobrazit čas",
+		density: "Hustota",
+		dCompact: "Hustá",
+		dNormal: "Normální",
+		dComfortable: "Vzdušná",
+		sizeDesc: "Velikost, největší první",
+		kbMode: "Režim klávesnice",
+		setSupport: "Podpořit autora - WeChat QR",
+	},
+	sk: {
+		root: "Koreň",
+		recent: "Nedávne",
+		all: "Všetko",
+		untitled: "Bez názvu",
+		untitledFolder: "Priečinok bez názvu",
+		empty: "Zatiaľ tu nič nie je",
+		emptyHint: "Vytvorte poznámku tlačidlom +",
+		emptySearch: "Žiadne súbory nezodpovedajú",
+		emptySearchHint: "Skúste iné slovo",
+		searchPlaceholder: "Hľadať",
+		searchTitle: "Hľadať v názvoch",
+		searchFull: "Hľadať v texte",
+		searching: "Hľadanie",
+		hitCount: "výsledkov",
+		newNote: "Nová poznámka",
+		newFolder: "Nový priečinok",
+		editOrder: "Poradie",
+		sortTitle: "Zoradiť súbory",
+		moved: "Presunuté",
+		renamed: "Premenované",
+		created: "Vytvorené",
+		cantUseView: "V Nedávnych a Všetkom sa nedá vytvárať",
+		createFailed: "Vytvorenie zlyhalo",
+		renameFailed: "Premenovanie zlyhalo",
+		moveFailed: "Presun zlyhal",
+		cantMoveIntoSelf: "Priečinok nemožno presunúť do seba samého",
+		nameAsc: "Názov, A po Z",
+		nameDesc: "Názov, Z po A",
+		mtimeDesc: "Zmenené, najnovšie prvé",
+		mtimeAsc: "Zmenené, najstaršie prvé",
+		ctimeDesc: "Vytvorené, najnovšie prvé",
+		ctimeAsc: "Vytvorené, najstaršie prvé",
+		ribbonOpen: "Otvoriť Manager",
+		ribbonSettings: "Otvoriť nastavenia",
+		cmdOpen: "Otvoriť Manager",
+		setBlocked: "Skryté priečinky",
+		setEmptyFolders: "Zobraziť prázdne priečinky",
+		setRecent: "Zobraziť Nedávne",
+		setAll: "Zobraziť Všetko",
+		setSettingsIcon: "Ikona nastavení v paneli",
+		setHomePage: "Otvoriť pri štarte",
+		setAnimations: "Animácie rozhrania",
+		setCollapse: "Zbaliť ľavý panel",
+		mapMode: "Štýl mapy",
+		mapDynamic: "Pohyblivá",
+		mapStatic: "Statická",
+		mapTitle: "Štruktúra poznámok",
+		mapRibbon: "Otvoriť štruktúru poznámok",
+		setMapIcon: "Ikona štruktúry v paneli",
+		showSize: "Zobraziť veľkosť",
+		showTime: "Zobraziť čas",
+		density: "Hustota",
+		dCompact: "Hustá",
+		dNormal: "Normálna",
+		dComfortable: "Vzdušná",
+		sizeDesc: "Veľkosť, najväčšie prvé",
+		kbMode: "Režim klávesnice",
+		setSupport: "Podporiť autora - WeChat QR",
+	},
+	sl: {
+		root: "Koren",
+		recent: "Nedavno",
+		all: "Vse",
+		untitled: "Brez naslova",
+		untitledFolder: "Mapa brez naslova",
+		empty: "Tu še ni ničesar",
+		emptyHint: "Ustvarite zapisek z +",
+		emptySearch: "Ni zadetkov",
+		emptySearchHint: "Poskusite drugo besedo",
+		searchPlaceholder: "Iskanje",
+		searchTitle: "Iskanje po naslovih",
+		searchFull: "Iskanje po besedilu",
+		searching: "Iskanje",
+		hitCount: "zadetkov",
+		newNote: "Nov zapisek",
+		newFolder: "Nova mapa",
+		editOrder: "Vrstni red",
+		sortTitle: "Razvrsti datoteke",
+		moved: "Premaknjeno",
+		renamed: "Preimenovano",
+		created: "Ustvarjeno",
+		cantUseView: "V Nedavnem in Vsem ni mogoče ustvarjati",
+		createFailed: "Ustvarjanje ni uspelo",
+		renameFailed: "Preimenovanje ni uspelo",
+		moveFailed: "Premik ni uspel",
+		cantMoveIntoSelf: "Mape ni mogoče premakniti vase",
+		nameAsc: "Ime, A do Ž",
+		nameDesc: "Ime, Ž do A",
+		mtimeDesc: "Spremenjeno, najnovejše prvo",
+		mtimeAsc: "Spremenjeno, najstarejše prvo",
+		ctimeDesc: "Ustvarjeno, najnovejše prvo",
+		ctimeAsc: "Ustvarjeno, najstarejše prvo",
+		ribbonOpen: "Odpri Manager",
+		ribbonSettings: "Odpri nastavitve",
+		cmdOpen: "Odpri Manager",
+		setBlocked: "Skrite mape",
+		setEmptyFolders: "Prikaži prazne mape",
+		setRecent: "Prikaži Nedavno",
+		setAll: "Prikaži Vse",
+		setSettingsIcon: "Ikona nastavitev v stranski vrstici",
+		setHomePage: "Odpri ob zagonu",
+		setAnimations: "Animacije vmesnika",
+		setCollapse: "Skrči levo vrstico",
+		mapMode: "Slog zemljevida",
+		mapDynamic: "Gibljiv",
+		mapStatic: "Statičen",
+		mapTitle: "Struktura zapiskov",
+		mapRibbon: "Odpri strukturo zapiskov",
+		setMapIcon: "Ikona strukture v stranski vrstici",
+		showSize: "Prikaži velikost",
+		showTime: "Prikaži čas",
+		density: "Gostota",
+		dCompact: "Tesno",
+		dNormal: "Običajno",
+		dComfortable: "Zračno",
+		sizeDesc: "Velikost, največje prvo",
+		kbMode: "Tipkovni način",
+		setSupport: "Podpri avtorja - WeChat QR",
+	},
+	sr: {
+		root: "Koren",
+		recent: "Nedavno",
+		all: "Sve",
+		untitled: "Bez naslova",
+		untitledFolder: "Folder bez naslova",
+		empty: "Ovde još nema ničega",
+		emptyHint: "Napravite belešku pomoću +",
+		emptySearch: "Nema rezultata",
+		emptySearchHint: "Probajte drugu reč",
+		searchPlaceholder: "Pretraga",
+		searchTitle: "Pretraga po naslovima",
+		searchFull: "Pretraga po tekstu",
+		searching: "Pretraga",
+		hitCount: "rezultata",
+		newNote: "Nova beleška",
+		newFolder: "Novi folder",
+		editOrder: "Redosled",
+		sortTitle: "Sortiraj datoteke",
+		moved: "Premešteno",
+		renamed: "Preimenovano",
+		created: "Napravljeno",
+		cantUseView: "U Nedavnom i Svemu se ne može praviti",
+		createFailed: "Pravljenje nije uspelo",
+		renameFailed: "Preimenovanje nije uspelo",
+		moveFailed: "Premeštanje nije uspelo",
+		cantMoveIntoSelf: "Folder se ne može premestiti u sam sebe",
+		nameAsc: "Naziv, A do Š",
+		nameDesc: "Naziv, Š do A",
+		mtimeDesc: "Izmenjeno, najnovije prvo",
+		mtimeAsc: "Izmenjeno, najstarije prvo",
+		ctimeDesc: "Napravljeno, najnovije prvo",
+		ctimeAsc: "Napravljeno, najstarije prvo",
+		ribbonOpen: "Otvori Manager",
+		ribbonSettings: "Otvori podešavanja",
+		cmdOpen: "Otvori Manager",
+		setBlocked: "Skriveni folderi",
+		setEmptyFolders: "Prikaži prazne foldere",
+		setRecent: "Prikaži Nedavno",
+		setAll: "Prikaži Sve",
+		setSettingsIcon: "Ikona podešavanja u bočnoj traci",
+		setHomePage: "Otvori pri pokretanju",
+		setAnimations: "Animacije interfejsa",
+		setCollapse: "Skupi levu traku",
+		mapMode: "Stil mape",
+		mapDynamic: "Pokretna",
+		mapStatic: "Statična",
+		mapTitle: "Struktura beležaka",
+		mapRibbon: "Otvori strukturu beležaka",
+		setMapIcon: "Ikona strukture u bočnoj traci",
+		showSize: "Prikaži veličinu",
+		showTime: "Prikaži vreme",
+		density: "Gustina",
+		dCompact: "Zbijeno",
+		dNormal: "Normalno",
+		dComfortable: "Prostrano",
+		sizeDesc: "Veličina, najveće prvo",
+		kbMode: "Režim tastature",
+		setSupport: "Podrži autora - WeChat QR",
+	},
+	hr: {
+		root: "Korijen",
+		recent: "Nedavno",
+		all: "Sve",
+		untitled: "Bez naslova",
+		untitledFolder: "Mapa bez naslova",
+		empty: "Ovdje još nema ničega",
+		emptyHint: "Stvorite bilješku pomoću +",
+		emptySearch: "Nema rezultata",
+		emptySearchHint: "Pokušajte drugu riječ",
+		searchPlaceholder: "Pretraži",
+		searchTitle: "Pretraži naslove",
+		searchFull: "Pretraži tekst",
+		searching: "Pretraga",
+		hitCount: "rezultata",
+		newNote: "Nova bilješka",
+		newFolder: "Nova mapa",
+		editOrder: "Redoslijed",
+		sortTitle: "Sortiraj datoteke",
+		moved: "Premješteno",
+		renamed: "Preimenovano",
+		created: "Stvoreno",
+		cantUseView: "U Nedavnom i Svemu se ne može stvarati",
+		createFailed: "Stvaranje nije uspjelo",
+		renameFailed: "Preimenovanje nije uspjelo",
+		moveFailed: "Premještanje nije uspjelo",
+		cantMoveIntoSelf: "Mapa se ne može premjestiti u samu sebe",
+		nameAsc: "Naziv, A do Ž",
+		nameDesc: "Naziv, Ž do A",
+		mtimeDesc: "Izmijenjeno, najnovije prvo",
+		mtimeAsc: "Izmijenjeno, najstarije prvo",
+		ctimeDesc: "Stvoreno, najnovije prvo",
+		ctimeAsc: "Stvoreno, najstarije prvo",
+		ribbonOpen: "Otvori Manager",
+		ribbonSettings: "Otvori postavke",
+		cmdOpen: "Otvori Manager",
+		setBlocked: "Skrivene mape",
+		setEmptyFolders: "Prikaži prazne mape",
+		setRecent: "Prikaži Nedavno",
+		setAll: "Prikaži Sve",
+		setSettingsIcon: "Ikona postavki u bočnoj traci",
+		setHomePage: "Otvori pri pokretanju",
+		setAnimations: "Animacije sučelja",
+		setCollapse: "Skupi lijevu traku",
+		mapMode: "Stil karte",
+		mapDynamic: "Pokretna",
+		mapStatic: "Statična",
+		mapTitle: "Struktura bilježaka",
+		mapRibbon: "Otvori strukturu bilježaka",
+		setMapIcon: "Ikona strukture u bočnoj traci",
+		showSize: "Prikaži veličinu",
+		showTime: "Prikaži vrijeme",
+		density: "Gustoća",
+		dCompact: "Zbijeno",
+		dNormal: "Normalno",
+		dComfortable: "Prostrano",
+		sizeDesc: "Veličina, najveće prvo",
+		kbMode: "Način tipkovnice",
+		setSupport: "Podrži autora - WeChat QR",
+	},
+	hu: {
+		root: "Gyökér",
+		recent: "Legutóbbi",
+		all: "Mind",
+		untitled: "Névtelen",
+		untitledFolder: "Névtelen mappa",
+		empty: "Itt még nincs semmi",
+		emptyHint: "Hozzon létre jegyzetet a + gombbal",
+		emptySearch: "Nincs találat",
+		emptySearchHint: "Próbáljon másik szót",
+		searchPlaceholder: "Keresés",
+		searchTitle: "Keresés címekben",
+		searchFull: "Keresés szövegben",
+		searching: "Keresés",
+		hitCount: "találat",
+		newNote: "Új jegyzet",
+		newFolder: "Új mappa",
+		editOrder: "Sorrend",
+		sortTitle: "Fájlok rendezése",
+		moved: "Áthelyezve",
+		renamed: "Átnevezve",
+		created: "Létrehozva",
+		cantUseView: "A Legutóbbi és a Mind nézetben nem hozható létre",
+		createFailed: "Nem sikerült létrehozni",
+		renameFailed: "Nem sikerült átnevezni",
+		moveFailed: "Nem sikerült áthelyezni",
+		cantMoveIntoSelf: "Egy mappa nem helyezhető önmagába",
+		nameAsc: "Név, A-tól Z-ig",
+		nameDesc: "Név, Z-től A-ig",
+		mtimeDesc: "Módosítva, legújabb elöl",
+		mtimeAsc: "Módosítva, legrégebbi elöl",
+		ctimeDesc: "Létrehozva, legújabb elöl",
+		ctimeAsc: "Létrehozva, legrégebbi elöl",
+		ribbonOpen: "Manager megnyitása",
+		ribbonSettings: "Beállítások megnyitása",
+		cmdOpen: "Manager megnyitása",
+		setBlocked: "Rejtett mappák",
+		setEmptyFolders: "Üres mappák mutatása",
+		setRecent: "Legutóbbi mutatása",
+		setAll: "Mind mutatása",
+		setSettingsIcon: "Beállítás ikon az oldalsávon",
+		setHomePage: "Megnyitás indításkor",
+		setAnimations: "Felület animációi",
+		setCollapse: "Bal oldalsáv összecsukása",
+		mapMode: "Térkép stílusa",
+		mapDynamic: "Mozgó",
+		mapStatic: "Statikus",
+		mapTitle: "Jegyzetstruktúra",
+		mapRibbon: "Jegyzetstruktúra megnyitása",
+		setMapIcon: "Struktúra ikon az oldalsávon",
+		showSize: "Méret mutatása",
+		showTime: "Idő mutatása",
+		density: "Sűrűség",
+		dCompact: "Sűrű",
+		dNormal: "Normál",
+		dComfortable: "Levegős",
+		sizeDesc: "Méret, legnagyobb elöl",
+		kbMode: "Billentyűzet mód",
+		setSupport: "Szerző támogatása - WeChat QR",
+	},
+	ro: {
+		root: "Rădăcină",
+		recent: "Recente",
+		all: "Toate",
+		untitled: "Fără titlu",
+		untitledFolder: "Folder fără titlu",
+		empty: "Aici nu e încă nimic",
+		emptyHint: "Creează o notă cu +",
+		emptySearch: "Niciun fișier nu corespunde",
+		emptySearchHint: "Încearcă alt cuvânt",
+		searchPlaceholder: "Caută",
+		searchTitle: "Caută în titluri",
+		searchFull: "Caută în text",
+		searching: "Se caută",
+		hitCount: "rezultate",
+		newNote: "Notă nouă",
+		newFolder: "Folder nou",
+		editOrder: "Ordonează",
+		sortTitle: "Sortează fișiere",
+		moved: "Mutat",
+		renamed: "Redenumit",
+		created: "Creat",
+		cantUseView: "Nu se poate crea în Recente sau Toate",
+		createFailed: "Crearea a eșuat",
+		renameFailed: "Redenumirea a eșuat",
+		moveFailed: "Mutarea a eșuat",
+		cantMoveIntoSelf: "Un folder nu poate fi mutat în el însuși",
+		nameAsc: "Nume, A la Z",
+		nameDesc: "Nume, Z la A",
+		mtimeDesc: "Modificat, cele noi primele",
+		mtimeAsc: "Modificat, cele vechi primele",
+		ctimeDesc: "Creat, cele noi primele",
+		ctimeAsc: "Creat, cele vechi primele",
+		ribbonOpen: "Deschide Manager",
+		ribbonSettings: "Deschide setările",
+		cmdOpen: "Deschide Manager",
+		setBlocked: "Foldere ascunse",
+		setEmptyFolders: "Arată folderele goale",
+		setRecent: "Arată Recente",
+		setAll: "Arată Toate",
+		setSettingsIcon: "Pictogramă setări în bară",
+		setHomePage: "Deschide la pornire",
+		setAnimations: "Animații interfață",
+		setCollapse: "Strânge bara laterală",
+		mapMode: "Stil hartă",
+		mapDynamic: "Animată",
+		mapStatic: "Statică",
+		mapTitle: "Structura notelor",
+		mapRibbon: "Deschide structura notelor",
+		setMapIcon: "Pictogramă structură în bară",
+		showSize: "Arată dimensiunea",
+		showTime: "Arată timpul",
+		density: "Densitate",
+		dCompact: "Compactă",
+		dNormal: "Normală",
+		dComfortable: "Aerisită",
+		sizeDesc: "Dimensiune, cea mai mare prima",
+		kbMode: "Mod tastatură",
+		setSupport: "Susține autorul - QR WeChat",
+	},
+	ca: {
+		root: "Arrel",
+		recent: "Recents",
+		all: "Tot",
+		untitled: "Sense títol",
+		untitledFolder: "Carpeta sense títol",
+		empty: "Aquí encara no hi ha res",
+		emptyHint: "Crea una nota amb +",
+		emptySearch: "Cap fitxer coincideix",
+		emptySearchHint: "Prova una altra paraula",
+		searchPlaceholder: "Cerca",
+		searchTitle: "Cerca als títols",
+		searchFull: "Cerca al text",
+		searching: "S'està cercant",
+		hitCount: "resultats",
+		newNote: "Nota nova",
+		newFolder: "Carpeta nova",
+		editOrder: "Reordena",
+		sortTitle: "Ordena fitxers",
+		moved: "Mogut",
+		renamed: "Reanomenat",
+		created: "Creat",
+		cantUseView: "No es pot crear a Recents o Tot",
+		createFailed: "No s'ha pogut crear",
+		renameFailed: "No s'ha pogut reanomenar",
+		moveFailed: "No s'ha pogut moure",
+		cantMoveIntoSelf: "Una carpeta no es pot moure dins d'ella mateixa",
+		nameAsc: "Nom, A a Z",
+		nameDesc: "Nom, Z a A",
+		mtimeDesc: "Modificat, nous primer",
+		mtimeAsc: "Modificat, antics primer",
+		ctimeDesc: "Creat, nous primer",
+		ctimeAsc: "Creat, antics primer",
+		ribbonOpen: "Obre Manager",
+		ribbonSettings: "Obre la configuració",
+		cmdOpen: "Obre Manager",
+		setBlocked: "Carpetes ocultes",
+		setEmptyFolders: "Mostra carpetes buides",
+		setRecent: "Mostra Recents",
+		setAll: "Mostra Tot",
+		setSettingsIcon: "Icona de configuració a la barra",
+		setHomePage: "Obre en iniciar",
+		setAnimations: "Animacions de la interfície",
+		setCollapse: "Replega la barra lateral",
+		mapMode: "Estil del mapa",
+		mapDynamic: "Animat",
+		mapStatic: "Estàtic",
+		mapTitle: "Estructura de notes",
+		mapRibbon: "Obre l'estructura de notes",
+		setMapIcon: "Icona d'estructura a la barra",
+		showSize: "Mostra la mida",
+		showTime: "Mostra l'hora",
+		density: "Densitat",
+		dCompact: "Compacta",
+		dNormal: "Normal",
+		dComfortable: "Àmplia",
+		sizeDesc: "Mida, més gran primer",
+		kbMode: "Mode teclat",
+		setSupport: "Dona suport a l'autor - QR WeChat",
+	},
+	el: {
+		root: "Ρίζα",
+		recent: "Πρόσφατα",
+		all: "Όλα",
+		untitled: "Χωρίς τίτλο",
+		untitledFolder: "Φάκελος χωρίς τίτλο",
+		empty: "Δεν υπάρχει τίποτα εδώ ακόμη",
+		emptyHint: "Δημιουργήστε σημείωση με +",
+		emptySearch: "Κανένα αρχείο δεν ταιριάζει",
+		emptySearchHint: "Δοκιμάστε άλλη λέξη",
+		searchPlaceholder: "Αναζήτηση",
+		searchTitle: "Αναζήτηση σε τίτλους",
+		searchFull: "Αναζήτηση σε κείμενο",
+		searching: "Αναζήτηση",
+		hitCount: "αποτελέσματα",
+		newNote: "Νέα σημείωση",
+		newFolder: "Νέος φάκελος",
+		editOrder: "Σειρά",
+		sortTitle: "Ταξινόμηση αρχείων",
+		moved: "Μετακινήθηκε",
+		renamed: "Μετονομάστηκε",
+		created: "Δημιουργήθηκε",
+		cantUseView: "Δεν μπορείτε να δημιουργήσετε στα Πρόσφατα ή Όλα",
+		createFailed: "Η δημιουργία απέτυχε",
+		renameFailed: "Η μετονομασία απέτυχε",
+		moveFailed: "Η μετακίνηση απέτυχε",
+		cantMoveIntoSelf: "Ένας φάκελος δεν μπορεί να μετακινηθεί μέσα στον εαυτό του",
+		nameAsc: "Όνομα, Α έως Ω",
+		nameDesc: "Όνομα, Ω έως Α",
+		mtimeDesc: "Τροποποιήθηκε, νεότερα πρώτα",
+		mtimeAsc: "Τροποποιήθηκε, παλαιότερα πρώτα",
+		ctimeDesc: "Δημιουργήθηκε, νεότερα πρώτα",
+		ctimeAsc: "Δημιουργήθηκε, παλαιότερα πρώτα",
+		ribbonOpen: "Άνοιγμα Manager",
+		ribbonSettings: "Άνοιγμα ρυθμίσεων",
+		cmdOpen: "Άνοιγμα Manager",
+		setBlocked: "Κρυφοί φάκελοι",
+		setEmptyFolders: "Εμφάνιση κενών φακέλων",
+		setRecent: "Εμφάνιση Πρόσφατων",
+		setAll: "Εμφάνιση Όλων",
+		setSettingsIcon: "Εικονίδιο ρυθμίσεων στην πλαϊνή στήλη",
+		setHomePage: "Άνοιγμα κατά την εκκίνηση",
+		setAnimations: "Κινούμενα σχέδια διεπαφής",
+		setCollapse: "Σύμπτυξη αριστερής στήλης",
+		mapMode: "Στυλ χάρτη",
+		mapDynamic: "Κινούμενος",
+		mapStatic: "Στατικός",
+		mapTitle: "Δομή σημειώσεων",
+		mapRibbon: "Άνοιγμα δομής σημειώσεων",
+		setMapIcon: "Εικονίδιο δομής στην πλαϊνή στήλη",
+		showSize: "Εμφάνιση μεγέθους",
+		showTime: "Εμφάνιση χρόνου",
+		density: "Πυκνότητα",
+		dCompact: "Πυκνή",
+		dNormal: "Κανονική",
+		dComfortable: "Άνετη",
+		sizeDesc: "Μέγεθος, μεγαλύτερο πρώτα",
+		kbMode: "Λειτουργία πληκτρολογίου",
+		setSupport: "Υποστηρίξτε τον δημιουργό - WeChat QR",
+	},
+	hi: {
+		root: "रूट",
+		recent: "हाल के",
+		all: "सभी",
+		untitled: "अनाम",
+		untitledFolder: "अनाम फ़ोल्डर",
+		empty: "यहाँ अभी कुछ नहीं है",
+		emptyHint: "+ से नोट बनाएँ",
+		emptySearch: "कोई फ़ाइल नहीं मिली",
+		emptySearchHint: "कोई दूसरा शब्द आज़माएँ",
+		searchPlaceholder: "खोजें",
+		searchTitle: "शीर्षक में खोजें",
+		searchFull: "पाठ में खोजें",
+		searching: "खोज रहे हैं",
+		hitCount: "परिणाम",
+		newNote: "नया नोट",
+		newFolder: "नया फ़ोल्डर",
+		editOrder: "क्रम",
+		sortTitle: "फ़ाइलें क्रमबद्ध करें",
+		moved: "स्थानांतरित",
+		renamed: "नाम बदला",
+		created: "बनाया",
+		cantUseView: "हाल के या सभी में नहीं बना सकते",
+		createFailed: "नहीं बना सके",
+		renameFailed: "नाम नहीं बदल सके",
+		moveFailed: "स्थानांतरित नहीं कर सके",
+		cantMoveIntoSelf: "फ़ोल्डर को उसी में नहीं ले जा सकते",
+		nameAsc: "नाम, A से Z",
+		nameDesc: "नाम, Z से A",
+		mtimeDesc: "बदला, नए पहले",
+		mtimeAsc: "बदला, पुराने पहले",
+		ctimeDesc: "बनाया, नए पहले",
+		ctimeAsc: "बनाया, पुराने पहले",
+		ribbonOpen: "Manager खोलें",
+		ribbonSettings: "सेटिंग्स खोलें",
+		cmdOpen: "Manager खोलें",
+		setBlocked: "छिपे फ़ोल्डर",
+		setEmptyFolders: "खाली फ़ोल्डर दिखाएँ",
+		setRecent: "हाल के दिखाएँ",
+		setAll: "सभी दिखाएँ",
+		setSettingsIcon: "साइडबार में सेटिंग्स आइकन",
+		setHomePage: "शुरू होने पर खोलें",
+		setAnimations: "इंटरफ़ेस एनिमेशन",
+		setCollapse: "बाईं पट्टी समेटें",
+		mapMode: "मैप शैली",
+		mapDynamic: "गतिशील",
+		mapStatic: "स्थिर",
+		mapTitle: "नोट संरचना",
+		mapRibbon: "नोट संरचना खोलें",
+		setMapIcon: "साइडबार में संरचना आइकन",
+		showSize: "आकार दिखाएँ",
+		showTime: "समय दिखाएँ",
+		density: "घनत्व",
+		dCompact: "सघन",
+		dNormal: "सामान्य",
+		dComfortable: "खुला",
+		sizeDesc: "आकार, सबसे बड़ा पहले",
+		kbMode: "कीबोर्ड मोड",
+		setSupport: "लेखक का साथ दें - WeChat QR",
+	},
+	th: {
+		root: "ราก",
+		recent: "ล่าสุด",
+		all: "ทั้งหมด",
+		untitled: "ไม่มีชื่อ",
+		untitledFolder: "โฟลเดอร์ไม่มีชื่อ",
+		empty: "ยังไม่มีอะไรที่นี่",
+		emptyHint: "สร้างโน้ตด้วยปุ่ม +",
+		emptySearch: "ไม่พบไฟล์ที่ตรงกัน",
+		emptySearchHint: "ลองคำอื่น",
+		searchPlaceholder: "ค้นหา",
+		searchTitle: "ค้นหาในชื่อ",
+		searchFull: "ค้นหาในเนื้อหา",
+		searching: "กำลังค้นหา",
+		hitCount: "รายการ",
+		newNote: "โน้ตใหม่",
+		newFolder: "โฟลเดอร์ใหม่",
+		editOrder: "ลำดับ",
+		sortTitle: "เรียงไฟล์",
+		moved: "ย้ายแล้ว",
+		renamed: "เปลี่ยนชื่อแล้ว",
+		created: "สร้างแล้ว",
+		cantUseView: "สร้างในล่าสุดหรือทั้งหมดไม่ได้",
+		createFailed: "สร้างไม่สำเร็จ",
+		renameFailed: "เปลี่ยนชื่อไม่สำเร็จ",
+		moveFailed: "ย้ายไม่สำเร็จ",
+		cantMoveIntoSelf: "ย้ายโฟลเดอร์เข้าไปในตัวเองไม่ได้",
+		nameAsc: "ชื่อ ก ถึง ฮ",
+		nameDesc: "ชื่อ ฮ ถึง ก",
+		mtimeDesc: "แก้ไข ใหม่ก่อน",
+		mtimeAsc: "แก้ไข เก่าก่อน",
+		ctimeDesc: "สร้าง ใหม่ก่อน",
+		ctimeAsc: "สร้าง เก่าก่อน",
+		ribbonOpen: "เปิด Manager",
+		ribbonSettings: "เปิดการตั้งค่า",
+		cmdOpen: "เปิด Manager",
+		setBlocked: "โฟลเดอร์ที่ซ่อน",
+		setEmptyFolders: "แสดงโฟลเดอร์ว่าง",
+		setRecent: "แสดงล่าสุด",
+		setAll: "แสดงทั้งหมด",
+		setSettingsIcon: "ไอคอนตั้งค่าในแถบด้านข้าง",
+		setHomePage: "เปิดเมื่อเริ่ม",
+		setAnimations: "แอนิเมชันอินเทอร์เฟซ",
+		setCollapse: "พับแถบด้านซ้าย",
+		mapMode: "สไตล์แผนที่",
+		mapDynamic: "เคลื่อนไหว",
+		mapStatic: "นิ่ง",
+		mapTitle: "โครงสร้างโน้ต",
+		mapRibbon: "เปิดโครงสร้างโน้ต",
+		setMapIcon: "ไอคอนโครงสร้างในแถบด้านข้าง",
+		showSize: "แสดงขนาด",
+		showTime: "แสดงเวลา",
+		density: "ความหนาแน่น",
+		dCompact: "แน่น",
+		dNormal: "ปกติ",
+		dComfortable: "โปร่ง",
+		sizeDesc: "ขนาด ใหญ่ก่อน",
+		kbMode: "โหมดคีย์บอร์ด",
+		setSupport: "สนับสนุนผู้พัฒนา - WeChat QR",
+	},
+	ar: {
+		root: "الجذر",
+		recent: "الأحدث",
+		all: "الكل",
+		untitled: "بلا عنوان",
+		untitledFolder: "مجلد بلا عنوان",
+		empty: "لا يوجد شيء هنا بعد",
+		emptyHint: "أنشئ ملاحظة بزر +",
+		emptySearch: "لا توجد ملفات مطابقة",
+		emptySearchHint: "جرّب كلمة أخرى",
+		searchPlaceholder: "بحث",
+		searchTitle: "البحث في العناوين",
+		searchFull: "البحث في النص",
+		searching: "جارٍ البحث",
+		hitCount: "نتيجة",
+		newNote: "ملاحظة جديدة",
+		newFolder: "مجلد جديد",
+		editOrder: "الترتيب",
+		sortTitle: "ترتيب الملفات",
+		moved: "تم النقل",
+		renamed: "تمت إعادة التسمية",
+		created: "تم الإنشاء",
+		cantUseView: "لا يمكن الإنشاء في الأحدث أو الكل",
+		createFailed: "تعذّر الإنشاء",
+		renameFailed: "تعذّرت إعادة التسمية",
+		moveFailed: "تعذّر النقل",
+		cantMoveIntoSelf: "لا يمكن نقل مجلد إلى داخل نفسه",
+		nameAsc: "الاسم، أ إلى ي",
+		nameDesc: "الاسم، ي إلى أ",
+		mtimeDesc: "المعدّل، الأحدث أولاً",
+		mtimeAsc: "المعدّل، الأقدم أولاً",
+		ctimeDesc: "المنشأ، الأحدث أولاً",
+		ctimeAsc: "المنشأ، الأقدم أولاً",
+		ribbonOpen: "فتح Manager",
+		ribbonSettings: "فتح الإعدادات",
+		cmdOpen: "فتح Manager",
+		setBlocked: "مجلدات مخفية",
+		setEmptyFolders: "إظهار المجلدات الفارغة",
+		setRecent: "إظهار الأحدث",
+		setAll: "إظهار الكل",
+		setSettingsIcon: "أيقونة الإعدادات في الشريط",
+		setHomePage: "الفتح عند البدء",
+		setAnimations: "حركات الواجهة",
+		setCollapse: "طيّ الشريط الأيسر",
+		mapMode: "نمط الخريطة",
+		mapDynamic: "متحركة",
+		mapStatic: "ثابتة",
+		mapTitle: "بنية الملاحظات",
+		mapRibbon: "فتح بنية الملاحظات",
+		setMapIcon: "أيقونة البنية في الشريط",
+		showSize: "إظهار الحجم",
+		showTime: "إظهار الوقت",
+		density: "الكثافة",
+		dCompact: "مضغوطة",
+		dNormal: "عادية",
+		dComfortable: "واسعة",
+		sizeDesc: "الحجم، الأكبر أولاً",
+		kbMode: "وضع لوحة المفاتيح",
+		setSupport: "ادعم المؤلف - WeChat QR",
+	},
+	he: {
+		root: "שורש",
+		recent: "אחרונים",
+		all: "הכול",
+		untitled: "ללא כותרת",
+		untitledFolder: "תיקייה ללא כותרת",
+		empty: "אין כאן עדיין דבר",
+		emptyHint: "צרו פתק עם +",
+		emptySearch: "לא נמצאו קבצים",
+		emptySearchHint: "נסו מילה אחרת",
+		searchPlaceholder: "חיפוש",
+		searchTitle: "חיפוש בכותרות",
+		searchFull: "חיפוש בטקסט",
+		searching: "מחפש",
+		hitCount: "תוצאות",
+		newNote: "פתק חדש",
+		newFolder: "תיקייה חדשה",
+		editOrder: "סדר",
+		sortTitle: "מיון קבצים",
+		moved: "הועבר",
+		renamed: "שם שונה",
+		created: "נוצר",
+		cantUseView: "אי אפשר ליצור באחרונים או בכול",
+		createFailed: "היצירה נכשלה",
+		renameFailed: "שינוי השם נכשל",
+		moveFailed: "ההעברה נכשלה",
+		cantMoveIntoSelf: "אי אפשר להעביר תיקייה לתוך עצמה",
+		nameAsc: "שם, א עד ת",
+		nameDesc: "שם, ת עד א",
+		mtimeDesc: "שונה, החדשים ראשונים",
+		mtimeAsc: "שונה, הישנים ראשונים",
+		ctimeDesc: "נוצר, החדשים ראשונים",
+		ctimeAsc: "נוצר, הישנים ראשונים",
+		ribbonOpen: "פתח Manager",
+		ribbonSettings: "פתח הגדרות",
+		cmdOpen: "פתח Manager",
+		setBlocked: "תיקיות מוסתרות",
+		setEmptyFolders: "הצג תיקיות ריקות",
+		setRecent: "הצג אחרונים",
+		setAll: "הצג הכול",
+		setSettingsIcon: "סמל הגדרות בסרגל",
+		setHomePage: "פתח בעת ההפעלה",
+		setAnimations: "אנימציות ממשק",
+		setCollapse: "כווץ את הסרגל השמאלי",
+		mapMode: "סגנון מפה",
+		mapDynamic: "נעה",
+		mapStatic: "סטטית",
+		mapTitle: "מבנה הפתקים",
+		mapRibbon: "פתח מבנה הפתקים",
+		setMapIcon: "סמל מבנה בסרגל",
+		showSize: "הצג גודל",
+		showTime: "הצג זמן",
+		density: "צפיפות",
+		dCompact: "צפוף",
+		dNormal: "רגיל",
+		dComfortable: "מרווח",
+		sizeDesc: "גודל, הגדול ראשון",
+		kbMode: "מצב מקלדת",
+		setSupport: "תמכו ביוצר - WeChat QR",
+	},
+	fa: {
+		root: "ریشه",
+		recent: "اخیر",
+		all: "همه",
+		untitled: "بی‌عنوان",
+		untitledFolder: "پوشه بی‌عنوان",
+		empty: "هنوز چیزی اینجا نیست",
+		emptyHint: "با + یادداشت بسازید",
+		emptySearch: "فایلی مطابقت ندارد",
+		emptySearchHint: "واژه دیگری را امتحان کنید",
+		searchPlaceholder: "جستجو",
+		searchTitle: "جستجو در عنوان‌ها",
+		searchFull: "جستجو در متن",
+		searching: "در حال جستجو",
+		hitCount: "نتیجه",
+		newNote: "یادداشت جدید",
+		newFolder: "پوشه جدید",
+		editOrder: "ترتیب",
+		sortTitle: "مرتب‌سازی فایل‌ها",
+		moved: "منتقل شد",
+		renamed: "تغییر نام یافت",
+		created: "ایجاد شد",
+		cantUseView: "در اخیر یا همه نمی‌توان ساخت",
+		createFailed: "ایجاد نشد",
+		renameFailed: "تغییر نام نشد",
+		moveFailed: "انتقال نشد",
+		cantMoveIntoSelf: "پوشه را نمی‌توان داخل خودش برد",
+		nameAsc: "نام، الف تا ی",
+		nameDesc: "نام، ی تا الف",
+		mtimeDesc: "تغییر‌یافته، جدیدتر اول",
+		mtimeAsc: "تغییر‌یافته، قدیمی‌تر اول",
+		ctimeDesc: "ایجاد‌شده، جدیدتر اول",
+		ctimeAsc: "ایجاد‌شده، قدیمی‌تر اول",
+		ribbonOpen: "باز کردن Manager",
+		ribbonSettings: "باز کردن تنظیمات",
+		cmdOpen: "باز کردن Manager",
+		setBlocked: "پوشه‌های پنهان",
+		setEmptyFolders: "نمایش پوشه‌های خالی",
+		setRecent: "نمایش اخیر",
+		setAll: "نمایش همه",
+		setSettingsIcon: "نماد تنظیمات در نوار کناری",
+		setHomePage: "باز کردن هنگام شروع",
+		setAnimations: "انیمیشن‌های رابط",
+		setCollapse: "جمع کردن نوار چپ",
+		mapMode: "سبک نقشه",
+		mapDynamic: "متحرک",
+		mapStatic: "ایستا",
+		mapTitle: "ساختار یادداشت‌ها",
+		mapRibbon: "باز کردن ساختار یادداشت‌ها",
+		setMapIcon: "نماد ساختار در نوار کناری",
+		showSize: "نمایش اندازه",
+		showTime: "نمایش زمان",
+		density: "چگالی",
+		dCompact: "فشرده",
+		dNormal: "معمولی",
+		dComfortable: "باز",
+		sizeDesc: "اندازه، بزرگ‌تر اول",
+		kbMode: "حالت صفحه‌کلید",
+		setSupport: "حمایت از نویسنده - WeChat QR",
+	},
+	be: {
+		root: "Корань",
+		recent: "Нядаўнія",
+		all: "Усе",
+		untitled: "Без назвы",
+		untitledFolder: "Папка без назвы",
+		empty: "Тут пакуль нічога няма",
+		emptyHint: "Стварыце нататку кнопкай +",
+		emptySearch: "Нічога не знойдзена",
+		emptySearchHint: "Паспрабуйце іншае слова",
+		searchPlaceholder: "Пошук",
+		searchTitle: "Пошук па назвах",
+		searchFull: "Пошук у тэксце",
+		searching: "Пошук",
+		hitCount: "вынікаў",
+		newNote: "Новая нататка",
+		newFolder: "Новая папка",
+		editOrder: "Парадак",
+		sortTitle: "Сартаванне",
+		moved: "Перанесена",
+		renamed: "Перайменавана",
+		created: "Створана",
+		cantUseView: "У «Нядаўніх» і «Усіх» нельга ствараць",
+		createFailed: "Не ўдалося стварыць",
+		renameFailed: "Не ўдалося перайменаваць",
+		moveFailed: "Не ўдалося перанесці",
+		cantMoveIntoSelf: "Папку нельга перанесці ў сябе",
+		nameAsc: "Назва, А да Я",
+		nameDesc: "Назва, Я да А",
+		mtimeDesc: "Зменена, новыя першыя",
+		mtimeAsc: "Зменена, старыя першыя",
+		ctimeDesc: "Створана, новыя першыя",
+		ctimeAsc: "Створана, старыя першыя",
+		ribbonOpen: "Адкрыць Manager",
+		ribbonSettings: "Адкрыць налады",
+		cmdOpen: "Адкрыць Manager",
+		setBlocked: "Схаваныя папкі",
+		setEmptyFolders: "Паказваць пустыя папкі",
+		setRecent: "Паказваць «Нядаўнія»",
+		setAll: "Паказваць «Усе»",
+		setSettingsIcon: "Значок налад у панэлі",
+		setHomePage: "Адкрываць пры запуску",
+		setAnimations: "Анімацыі інтэрфейсу",
+		setCollapse: "Згортваць левую панэль",
+		mapMode: "Стыль карты",
+		mapDynamic: "Анімаваная",
+		mapStatic: "Статычная",
+		mapTitle: "Структура нататак",
+		mapRibbon: "Адкрыць структуру нататак",
+		setMapIcon: "Значок структуры ў панэлі",
+		showSize: "Паказваць памер",
+		showTime: "Паказваць час",
+		density: "Шчыльнасць",
+		dCompact: "Шчыльная",
+		dNormal: "Звычайная",
+		dComfortable: "Прасторная",
+		sizeDesc: "Памер, ад большога",
+		kbMode: "Рэжым клавіятуры",
+		setSupport: "Падтрымаць аўтара - WeChat QR",
+	},
+};
+
+Object.assign(MG_LANGS, MG_LANGS_EXTRA);
+
+/* 英式英语和英语同一份文案, 只是 Obsidian 把它当独立语言报上来. */
+MG_LANGS["en-GB"] = MG_LANGS.en;
 
 /* ===== 10-index.js ===== */
 "use strict";
@@ -911,15 +2805,19 @@ function mgBuildRows(input) {
 
 	/* 每个目录的递归笔记数一次算完. 之前每画一个文件夹标题都要扫一遍全库,
 	   一万篇加两百个文件夹就是两百万次比较, 而这里只要一次遍历乘层数. */
+	/* 计数和体积在同一个循环里累加: 多存一个数, 不多走一遍. */
 	const counts = new Map();
+	const sizes = new Map();
 	for (const entry of index.entries) {
 		let dir = entry.parent;
 		while (dir) {
 			counts.set(dir, (counts.get(dir) || 0) + 1);
+			sizes.set(dir, (sizes.get(dir) || 0) + mgNumber(entry.size));
 			dir = mgDir(dir);
 		}
 	}
 	const countOf = (path) => counts.get(path) || 0;
+	const sizeOf = (path) => sizes.get(path) || 0;
 
 	const walk = (dir, level) => {
 		const notes = mgSortNotes(index.notesIn(dir), mode, noteOrder[dir] || []);
@@ -962,6 +2860,7 @@ function mgBuildRows(input) {
 				name: kid.name,
 				level: mgClampLevel(next),
 				count,
+				size: sizeOf(kid.path),
 				open: !collapsed.has(kid.path)
 			});
 			if (collapsed.has(kid.path)) rows.push({ type: "dots", level: mgClampLevel(next), path: kid.path });
@@ -1088,6 +2987,11 @@ class MgView extends ItemView {
 		root.classList.add("mg-view");
 		root.classList.toggle("is-static", this.plugin.data.animations === false);
 		this.keyboardMode = this.plugin.data.keyboardMode === true;
+		this.showSize = this.plugin.data.showSize === true;
+		this.showTime = this.plugin.data.showTime !== false;
+		const density = this.plugin.data.density || "normal";
+		root.classList.toggle("is-compact", density === "compact");
+		root.classList.toggle("is-comfortable", density === "comfortable");
 
 		const page = mgEl("div", "mg-page");
 		root.appendChild(page);
@@ -1471,7 +3375,12 @@ class MgView extends ItemView {
 		head.appendChild(name);
 
 		/* 空文件夹不写 0: 一整列 0 是噪音, 标题本身已经在说这里是空的. */
-		if (row.count > 0) head.appendChild(mgEl("span", "mg-folder-count", String(row.count)));
+		if (row.count > 0 || (this.showSize && row.size > 0)) {
+			const tail = mgEl("span", "mg-folder-tail");
+			if (row.count > 0) tail.appendChild(mgEl("span", "mg-folder-count", String(row.count)));
+			if (this.showSize && row.size > 0) tail.appendChild(mgEl("span", "mg-folder-size", mgFormatSize(row.size)));
+			head.appendChild(tail);
+		}
 
 		head.setAttribute("title", row.path);
 		if (row.open) head.classList.add("is-open");
@@ -1541,7 +3450,8 @@ class MgView extends ItemView {
 			line.classList.add("is-two-line");
 		}
 		line.appendChild(main);
-		line.appendChild(mgEl("span", "mg-note-when", mgRelative(entry.mtime)));
+		if (this.showSize) line.appendChild(mgEl("span", "mg-note-size", mgFormatSize(entry.size)));
+		if (this.showTime) line.appendChild(mgEl("span", "mg-note-when", mgRelative(entry.mtime)));
 		return line;
 	}
 
@@ -1646,6 +3556,392 @@ class MgView extends ItemView {
 			});
 		}
 		menu.showAtMouseEvent(event);
+	}
+}
+
+/* ===== 25-map.js ===== */
+"use strict";
+
+/* ---------- 笔记结构视图 ----------
+
+   动态是一张会动的径向图: 初始位置按层级铺开, 然后跑一套轻量力学把重叠
+   推开, 节点可以用鼠标拖, 拖完松开它会自己弹回去. 静态是一棵缩进树.
+
+   力学的量纲是像素/帧: 斥力 1400/d², 弹簧目标 110, 中心引力 0.0025,
+   阻尼 0.86. 每帧 O(n²); 超过 400 个节点就跳过仿真直接摆最终位置. */
+
+const MG_MAP_MAX_SIM = 400;
+
+class MgMapView extends ItemView {
+	constructor(leaf, plugin) {
+		super(leaf);
+		this.plugin = plugin;
+		this.index = new MgIndex(this.app);
+		this.nodes = [];
+		this.links = [];
+		this.frame = 0;
+		this.drag = null;
+		this.pan = null;
+		this.cleanup = null;
+	}
+
+	getViewType() {
+		return "manager-map";
+	}
+
+	getDisplayText() {
+		return MG_TEXT.mapTitle;
+	}
+
+	getIcon() {
+		return MG_MAP_ICON;
+	}
+
+	async onOpen() {
+		this.index.build(this.plugin.data.blockedFolders);
+		this.render();
+	}
+
+	async onClose() {
+		this.stopFrame();
+	}
+
+	vaultName() {
+		const vault = this.app && this.app.vault;
+		return vault && typeof vault.getName === "function" ? vault.getName() : "Vault";
+	}
+
+	mode() {
+		return this.plugin.data.mapMode === "static" ? "static" : "dynamic";
+	}
+
+	setMode(mode) {
+		this.plugin.data.mapMode = mode;
+		void this.plugin.saveData(this.plugin.data);
+		this.render();
+	}
+
+	render() {
+		this.stopFrame();
+		const root = this.contentEl;
+		mgClear(root);
+		root.classList.add("mg-map-view");
+
+		this.renderTools(root);
+
+		const wrap = document.createElement("div");
+		wrap.className = "mg-map";
+		root.appendChild(wrap);
+
+		if (this.mode() === "static") this.renderStatic(wrap);
+		else this.renderDynamic(wrap);
+	}
+
+	/* 右上角两个按钮: 图形态与树形态, 当前那个用强调色. */
+	renderTools(root) {
+		const tools = document.createElement("div");
+		tools.className = "mg-map-tools";
+
+		const entries = [
+			["dynamic", "network", MG_TEXT.mapDynamic],
+			["static", "list", MG_TEXT.mapStatic]
+		];
+
+		for (const [mode, icon, label] of entries) {
+			const btn = document.createElement("button");
+			btn.type = "button";
+			btn.className = "mg-map-tool";
+			btn.setAttribute("aria-label", label);
+			btn.setAttribute("title", label);
+			if (this.mode() === mode) btn.classList.add("is-on");
+			setIcon(btn, icon);
+			btn.addEventListener("click", () => this.setMode(mode));
+			tools.appendChild(btn);
+		}
+
+		root.appendChild(tools);
+	}
+
+	/* ---------- 静态: 缩进的树 ---------- */
+
+	renderStatic(wrap) {
+		wrap.classList.add("is-static");
+		wrap.appendChild(this.branch(this.vaultName(), this.index.rootFolders(), true));
+	}
+
+	branch(label, kids, isRoot) {
+		const box = document.createElement("div");
+		box.className = "mg-map-node" + (isRoot ? " is-root" : "");
+
+		const name = document.createElement("span");
+		name.className = "mg-map-label";
+		name.textContent = label;
+		box.appendChild(name);
+
+		if (kids && kids.length > 0) {
+			const list = document.createElement("div");
+			list.className = "mg-map-children";
+			for (const kid of kids) {
+				list.appendChild(this.branch(kid.name, this.index.childFolders(kid.path), false));
+			}
+			box.appendChild(list);
+		}
+
+		return box;
+	}
+
+	/* ---------- 动态: 力学图 ---------- */
+
+	renderDynamic(wrap) {
+		const nodes = [];
+		const links = [];
+		const radiusOf = (depth) => (depth === 0 ? 0 : 104 + (depth - 1) * 68);
+
+		const place = (label, depth, angle, parent) => {
+			const radius = radiusOf(depth);
+			const node = {
+				label,
+				depth,
+				x: Math.cos(angle) * radius,
+				y: Math.sin(angle) * radius,
+				vx: 0,
+				vy: 0,
+				fixed: false,
+				el: null
+			};
+			nodes.push(node);
+			if (parent) links.push({ from: parent, to: node, el: null });
+			return node;
+		};
+
+		const grow = (parent, kids, depth, center, spread) => {
+			if (!kids || kids.length === 0) return;
+			const count = kids.length;
+			for (let i = 0; i < count; i += 1) {
+				const angle = count === 1 ? center : center - spread / 2 + (spread * i) / (count - 1);
+				const node = place(kids[i].name, depth, angle, parent);
+				grow(node, this.index.childFolders(kids[i].path), depth + 1, angle, Math.max(spread / count, 0.7));
+			}
+		};
+
+		const rootNode = place(this.vaultName(), 0, 0, null);
+		grow(rootNode, this.index.rootFolders(), 1, 0, Math.PI * 2);
+
+		let minX = 0;
+		let maxX = 0;
+		let minY = 0;
+		let maxY = 0;
+		for (const node of nodes) {
+			minX = Math.min(minX, node.x);
+			maxX = Math.max(maxX, node.x);
+			minY = Math.min(minY, node.y);
+			maxY = Math.max(maxY, node.y);
+		}
+
+		const pad = 120;
+		const ns = "http://www.w3.org/2000/svg";
+		const svg = document.createElementNS(ns, "svg");
+		svg.setAttribute("class", "mg-map-svg");
+		svg.setAttribute("viewBox", [minX - pad, minY - pad, maxX - minX + pad * 2, maxY - minY + pad * 2].join(" "));
+
+		for (const link of links) {
+			const line = document.createElementNS(ns, "line");
+			line.setAttribute("pathLength", "1");
+			line.setAttribute("class", "mg-map-link");
+			line.style.animationDelay = link.to.depth * 90 + "ms";
+			svg.appendChild(line);
+			link.el = line;
+		}
+
+		for (const node of nodes) {
+			const group = document.createElementNS(ns, "g");
+			group.setAttribute("class", "mg-map-dot is-depth-" + Math.min(node.depth, 3));
+			group.style.animationDelay = node.depth * 90 + nodes.indexOf(node) * 8 + "ms";
+
+			const dot = document.createElementNS(ns, "circle");
+			dot.setAttribute("r", node.depth === 0 ? 7 : 4);
+			group.appendChild(dot);
+
+			const text = document.createElementNS(ns, "text");
+			text.setAttribute("x", node.depth === 0 ? 12 : 9);
+			text.setAttribute("y", "4");
+			text.textContent = node.label;
+			group.appendChild(text);
+
+			svg.appendChild(group);
+			node.el = group;
+		}
+
+		this.nodes = nodes;
+		this.links = links;
+		this.svg = svg;
+		this.paint();
+		wrap.appendChild(svg);
+		this.bindDrag(svg);
+		if (nodes.length <= MG_MAP_MAX_SIM) this.startFrame();
+	}
+
+	/* 把内存里的坐标写回 SVG. */
+	paint() {
+		for (const node of this.nodes) {
+			node.el.setAttribute("transform", "translate(" + node.x.toFixed(1) + "," + node.y.toFixed(1) + ")");
+		}
+		for (const link of this.links) {
+			link.el.setAttribute("x1", link.from.x.toFixed(1));
+			link.el.setAttribute("y1", link.from.y.toFixed(1));
+			link.el.setAttribute("x2", link.to.x.toFixed(1));
+			link.el.setAttribute("y2", link.to.y.toFixed(1));
+		}
+	}
+
+	toSvg(event) {
+		const svg = this.svg;
+		if (!svg) return { x: 0, y: 0 };
+		const rect = svg.getBoundingClientRect();
+		const box = svg.viewBox.baseVal;
+		const scaleX = box.width / (rect.width || 1);
+		const scaleY = box.height / (rect.height || 1);
+		return {
+			x: box.x + (event.clientX - rect.left) * scaleX,
+			y: box.y + (event.clientY - rect.top) * scaleY
+		};
+	}
+
+	bindDrag(svg) {
+		svg.addEventListener("mousedown", (event) => {
+			if (event.button !== 0) return;
+			const hit = event.target && event.target.closest ? event.target.closest(".mg-map-dot") : null;
+			const point = this.toSvg(event);
+
+			if (hit) {
+				const node = this.nodes.filter((item) => item.el === hit)[0];
+				if (!node) return;
+				node.fixed = true;
+				this.drag = { node, dx: node.x - point.x, dy: node.y - point.y };
+				event.preventDefault();
+				this.startFrame();
+				return;
+			}
+
+			const box = svg.viewBox.baseVal;
+			this.pan = { x: event.clientX, y: event.clientY, bx: box.x, by: box.y };
+			event.preventDefault();
+		});
+
+		const move = (event) => {
+			if (this.drag) {
+				const point = this.toSvg(event);
+				this.drag.node.x = point.x + this.drag.dx;
+				this.drag.node.y = point.y + this.drag.dy;
+				this.drag.node.vx = 0;
+				this.drag.node.vy = 0;
+				this.paint();
+				return;
+			}
+			if (this.pan && this.svg) {
+				const rect = this.svg.getBoundingClientRect();
+				const box = this.svg.viewBox.baseVal;
+				const scaleX = box.width / (rect.width || 1);
+				const scaleY = box.height / (rect.height || 1);
+				const dx = (event.clientX - this.pan.x) * scaleX;
+				const dy = (event.clientY - this.pan.y) * scaleY;
+				this.svg.setAttribute(
+					"viewBox",
+					[this.pan.bx - dx, this.pan.by - dy, box.width, box.height].join(" ")
+				);
+			}
+		};
+
+		const up = () => {
+			if (this.drag) {
+				this.drag.node.fixed = false;
+				this.drag = null;
+				this.startFrame();
+			}
+			this.pan = null;
+		};
+
+		document.addEventListener("mousemove", move);
+		document.addEventListener("mouseup", up);
+		this.cleanup = () => {
+			document.removeEventListener("mousemove", move);
+			document.removeEventListener("mouseup", up);
+		};
+	}
+
+	startFrame() {
+		if (this.frame) return;
+		const step = () => {
+			this.frame = 0;
+			const energy = this.tick();
+			if (this.drag || energy > 0.35) this.startFrame();
+		};
+		this.frame = requestAnimationFrame(step);
+	}
+
+	stopFrame() {
+		if (this.frame && typeof cancelAnimationFrame === "function") cancelAnimationFrame(this.frame);
+		this.frame = 0;
+		if (this.cleanup) {
+			this.cleanup();
+			this.cleanup = null;
+		}
+	}
+
+	tick() {
+		const nodes = this.nodes;
+		const links = this.links;
+
+		for (let i = 0; i < nodes.length; i += 1) {
+			for (let j = i + 1; j < nodes.length; j += 1) {
+				const a = nodes[i];
+				const b = nodes[j];
+				let dx = b.x - a.x;
+				let dy = b.y - a.y;
+				let d2 = dx * dx + dy * dy;
+				if (d2 < 1) {
+					dx = 0.6;
+					dy = 0.4;
+					d2 = 1;
+				}
+				const d = Math.sqrt(d2);
+				const force = 1400 / Math.max(d2, 900);
+				const fx = (dx / d) * force;
+				const fy = (dy / d) * force;
+				a.vx -= fx;
+				a.vy -= fy;
+				b.vx += fx;
+				b.vy += fy;
+			}
+		}
+
+		for (const link of links) {
+			const dx = link.to.x - link.from.x;
+			const dy = link.to.y - link.from.y;
+			const d = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+			const force = (d - 110) * 0.02;
+			const fx = (dx / d) * force;
+			const fy = (dy / d) * force;
+			link.from.vx += fx;
+			link.from.vy += fy;
+			link.to.vx -= fx;
+			link.to.vy -= fy;
+		}
+
+		let energy = 0;
+		for (const node of nodes) {
+			if (node.fixed) continue;
+			node.vx -= node.x * 0.0025;
+			node.vy -= node.y * 0.0025;
+			node.vx *= 0.86;
+			node.vy *= 0.86;
+			node.x += node.vx;
+			node.y += node.vy;
+			energy += Math.abs(node.vx) + Math.abs(node.vy);
+		}
+
+		this.paint();
+		return energy;
 	}
 }
 
@@ -2439,10 +4735,54 @@ class ManagerSettingTab extends PluginSettingTab {
 			this.plugin.refreshViews();
 		});
 
+		flag(MG_TEXT.showSize, data.showSize === true, (value) => {
+			data.showSize = value;
+			this.plugin.refreshViews();
+		});
+
+		flag(MG_TEXT.showTime, data.showTime !== false, (value) => {
+			data.showTime = value;
+			this.plugin.refreshViews();
+		});
+
+		new Setting(container)
+			.setName(MG_TEXT.density)
+			.addDropdown((drop) =>
+				drop
+					.addOption("compact", MG_TEXT.dCompact)
+					.addOption("normal", MG_TEXT.dNormal)
+					.addOption("comfortable", MG_TEXT.dComfortable)
+					.setValue(data.density || "normal")
+					.onChange((value) => {
+						data.density = value;
+						void this.plugin.saveData(data);
+						this.plugin.refreshViews();
+					})
+			);
+
 		flag(MG_TEXT.setSettingsIcon, data.showSettingsIcon !== false, (value) => {
 			data.showSettingsIcon = value;
 			this.plugin.syncSettingsRibbon();
 		});
+
+		flag(MG_TEXT.setMapIcon, data.showMapIcon !== false, (value) => {
+			data.showMapIcon = value;
+			this.plugin.syncMapRibbon();
+		});
+
+		new Setting(container)
+			.setName(MG_TEXT.mapMode)
+			.addDropdown((drop) =>
+				drop
+					.addOption("dynamic", MG_TEXT.mapDynamic)
+					.addOption("static", MG_TEXT.mapStatic)
+					.setValue(data.mapMode === "static" ? "static" : "dynamic")
+					.onChange((value) => {
+						data.mapMode = value;
+						void this.plugin.saveData(data);
+						this.plugin.refreshMap();
+					})
+			);
 
 		flag(MG_TEXT.setHomePage, data.homePage === true, (value) => {
 			data.homePage = value;
@@ -2491,12 +4831,25 @@ class ManagerPlugin extends Plugin {
 		await this.loadSettings();
 
 		this.registerView(MG_VIEW_TYPE, (leaf) => new MgView(leaf, this));
+		this.registerView(MG_MAP_TYPE, (leaf) => new MgMapView(leaf, this));
 
 		this.homeRibbon = this.addRibbonIcon(MG_ICON, MG_TEXT.ribbonOpen, () => {
 			void this.activateView();
 		});
+		this.mapRibbon = this.addRibbonIcon(MG_MAP_ICON, MG_TEXT.mapRibbon, () => {
+			void this.activateMap();
+		});
 		this.settingsRibbon = null;
 		this.syncSettingsRibbon();
+		this.syncMapRibbon();
+
+		this.addCommand({
+			id: "open-map",
+			name: MG_TEXT.mapRibbon,
+			callback: () => {
+				void this.activateMap();
+			}
+		});
 
 		this.addCommand({
 			id: "open-manager",
@@ -2633,6 +4986,46 @@ class ManagerPlugin extends Plugin {
 
 	/* ---------- 设置入口 ---------- */
 
+	/* 图谱图标可以在设置里关掉, 关掉之后命令面板还能进. */
+	syncMapRibbon() {
+		const want = this.data.showMapIcon !== false;
+		if (want && !this.mapRibbon) {
+			this.mapRibbon = this.addRibbonIcon(MG_MAP_ICON, MG_TEXT.mapRibbon, () => {
+				void this.activateMap();
+			});
+		} else if (!want && this.mapRibbon) {
+			if (this.mapRibbon.remove) this.mapRibbon.remove();
+			this.mapRibbon = null;
+		}
+	}
+
+	/* 图谱开着的时候改了样式, 让它当场重画, 不用关掉再开. */
+	refreshMap() {
+		const leaves = this.app.workspace.getLeavesOfType(MG_MAP_TYPE) || [];
+		for (const leaf of leaves) {
+			const view = leaf && leaf.view;
+			if (!view || typeof view.render !== "function") continue;
+			if (view.index) view.index.build(this.data.blockedFolders);
+			view.render();
+		}
+	}
+
+	async activateMap() {
+		const existing = this.app.workspace.getLeavesOfType(MG_MAP_TYPE);
+		let leaf = existing && existing.length > 0 ? existing[0] : null;
+		if (!leaf) {
+			leaf = this.app.workspace.getLeaf("tab");
+			if (leaf) await leaf.setViewState({ type: MG_MAP_TYPE, active: true });
+		}
+		if (leaf && this.app.workspace.revealLeaf) {
+			try {
+				await this.app.workspace.revealLeaf(leaf);
+			} catch (error) {
+				/* 老版本没有 revealLeaf, 视图也已经开出来了 */
+			}
+		}
+	}
+
 	syncSettingsRibbon() {
 		const want = this.data.showSettingsIcon !== false;
 		if (want && !this.settingsRibbon) {
@@ -2713,6 +5106,7 @@ class ManagerPlugin extends Plugin {
 
 module.exports = ManagerPlugin;
 module.exports.__view = MgView;
+module.exports.__map = MgMapView;
 module.exports.__settings = ManagerSettingTab;
 module.exports.__core = {
 	mgDir,
@@ -2742,5 +5136,6 @@ module.exports.__core = {
 	MG_TEXT,
 	MG_LANGS,
 	mgLanguage,
-	MG_ICON
+	MG_ICON,
+	MG_MAP_ICON
 };
