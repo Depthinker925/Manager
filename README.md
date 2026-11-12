@@ -1,11 +1,11 @@
-# Manager
+# Note Manager
 
-Effortless Note Management
+A file manager for your vault: sort, search and reorganise notes, PDFs, images and canvas from one wide view.
 
 Supported languages: English, 简体中文, 繁體中文, 日本語, 한국어, Deutsch, Français, Español
 
-v 1.0.0
-
+![Note Manager showing a vault with many folders](assets/screenshot-1.png)
+![Note Manager showing a vault with Baseline Theme](assets/screenshot-2.png)
 ---
 
 ## What it does
@@ -20,7 +20,7 @@ It sorts and groups notes using nothing but each file's path, name, modification
 
 ### Top bar
 
-1. Two icons: a clock with a rewind arrow for notes sorted by when you last opened them, and a stacked-layers shape for all notes
+1. Two icons: a clock with a rewind arrow for notes sorted by when they were last modified, and a stacked-layers shape for all files in the vault
 2. Location: the root folder plus the names of first-level folders
 3. Four fixed icons on the right: search, plus, pencil, sort
 
@@ -116,33 +116,29 @@ All of it can be turned off in settings.
 
 ---
 
-## Source layout
+## No build step
 
-- `00-prelude.js`: path helpers, name collisions, sort comparators
-- `05-i18n.js`: text tables for the eight languages
-- `10-index.js`: scans the vault, builds row data
-- `20-view.js`: view shell, top bar, list rendering
-- `30-interact.js`: clicks, creation, drag, collapse, context menu
-- `40-search.js`: full-text search in batches
-- `45-settings.js`: settings page
-- `50-plugin.js`: plugin entry, startup curtain, ribbon and command
+Manager ships as one file. There is no bundler, no `node_modules`, no compile pass, nothing to `npm install` before you can read the source: `main.js` is 2,472 lines and every one of them is the code that runs. Open it and read it.
 
----
+The only outside name it reaches for is `obsidian`, which the app injects at load time. Everything else is plain JavaScript.
 
-## Build and test
+## Test
 
 ```
-node build.cjs          bundle main.js
-node test/core.cjs      pure functions, plugin registration, i18n coverage - 140 checks
-node test/view.cjs      DOM and interaction - 84 checks, needs jsdom
-node test/style.cjs     style rules - 75 checks
-node test/preview.cjs   preview page self-check - 8 checks, runs the real main.js
-node test/bench.cjs     timing at ten thousand files
+node test.cjs
 ```
 
----
+`test.cjs` swaps `require("obsidian")` for a stub, loads `main.js` unchanged and exercises the pure functions exported on `__core`: path handling, name collisions, sort comparators, row building. No framework, no fixtures, one file.
 
+---
 ## Version
+
+1.0.2
+
+- Renamed to Note Manager, with a description that says what it actually does
+- README no longer lists build and test commands that do not exist in the plugin folder
+- Fixed: Recent sorts by modification time, not by when a note was last opened
+- Added screenshots and a `test.cjs` you can run on its own
 
 1.0.1
 
