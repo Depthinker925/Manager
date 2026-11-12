@@ -1078,3 +1078,27 @@ body.mg-booting-main .workspace-split.mod-root {
 .mg-btn.is-danger:hover {
 	filter: brightness(1.08);
 }
+
+/* ---------- 触摸 ----------
+
+   手指比光标粗, 行高和图标都要给够; 手机上少一个图标, 右侧留白也跟着收. */
+
+@media (pointer: coarse) {
+	.view-content.mg-view {
+		--mg-row-one: 44px;
+		--mg-row-two: 54px;
+	}
+
+	.view-content.mg-view .mg-icon {
+		width: 34px;
+		height: 34px;
+	}
+
+	.view-content.mg-view .mg-tab {
+		padding: 0 8px;
+	}
+}
+
+.view-content.mg-view.is-mobile .mg-nav {
+	--mg-actions: 124px;
+}

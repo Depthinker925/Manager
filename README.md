@@ -92,6 +92,18 @@ All of it can be turned off in settings.
 
 ---
 
+## On mobile
+
+The plugin runs on iOS and Android as well as desktop.
+
+- Rows and toolbar icons grow on coarse pointers, so a finger has something to hit
+- Long-press a row for the same menu a right-click gives on desktop
+- The keyboard mode toggle is left out — there is no physical keyboard for it to serve
+- Search, filter tokens, creating, sorting and the structure view all behave the same
+- Dragging files onto a folder is desktop only: touch dragging is not HTML5 drag, and the list needs that gesture for scrolling
+
+---
+
 ## Keyboard
 
 The last icon on the right switches keyboard mode on and off.
@@ -210,6 +222,11 @@ node test.cjs
 ---
 
 ## Version
+
+1.0.6
+
+- Runs on mobile: larger touch targets, long-press for the file menu
+- The keyboard mode toggle is hidden on mobile
 
 1.0.5
 

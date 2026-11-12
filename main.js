@@ -9,7 +9,7 @@
    每一节只用 const 声明一次，拼接后仍是同一个作用域。 */
 
 const obsidian = require("obsidian");
-const { Plugin, ItemView, Menu, Modal, Notice, setIcon, Setting, PluginSettingTab, getLanguage } = obsidian;
+const { Plugin, ItemView, Menu, Modal, Notice, Platform, setIcon, Setting, PluginSettingTab, getLanguage } = obsidian;
 
 const MG_VIEW_TYPE = "manager-view";
 const MG_MAP_TYPE = "manager-map";
@@ -3244,7 +3244,11 @@ class MgView extends ItemView {
 	render() {
 		const root = this.contentEl;
 		mgClear(root);
+		/* 手机上物理键盘不是常态, 键盘模式那个开关也就不摆出来了.
+		   这一行必须在建工具栏之前, 否则按钮已经按下桌子再加判断. */
+		this.mobile = Boolean(Platform && Platform.isMobile);
 		root.classList.add("mg-view");
+		if (this.mobile) root.classList.add("is-mobile");
 		root.classList.toggle("is-static", this.plugin.data.animations === false);
 		this.keyboardMode = this.plugin.data.keyboardMode === true;
 		this.showSize = this.plugin.data.showSize === true;
@@ -3289,7 +3293,7 @@ class MgView extends ItemView {
 		this.actionsEl.appendChild(this.plusBtn);
 		this.actionsEl.appendChild(this.editBtn);
 		this.actionsEl.appendChild(this.sortBtn);
-		this.actionsEl.appendChild(this.kbBtn);
+		if (!this.mobile) this.actionsEl.appendChild(this.kbBtn);
 		this.syncSortIcon();
 		this.bindActions();
 
@@ -5044,6 +5048,58 @@ class MgConfirmModal extends Modal {
 	}
 }
 
+/* ---------- 长按 ----------
+
+   手机上没有右键, 长按就是右键. 480ms 起效, 期间手指一滑动就取消 ——
+   列表本身要能滚, 滚的时候不能弹出菜单. */
+
+MgView.prototype.bindLongPress = function () {
+	let timer = 0;
+	let node = null;
+
+	const cancel = () => {
+		if (timer) window.clearTimeout(timer);
+		timer = 0;
+		node = null;
+	};
+
+	this.listEl.addEventListener(
+		"touchstart",
+		(event) => {
+			if (!this.mobile) return;
+			const hit = event.target && event.target.closest ? event.target.closest(".mg-note, .mg-folder") : null;
+			if (!hit) return;
+			cancel();
+			node = hit;
+			timer = window.setTimeout(() => {
+				timer = 0;
+				const point = event.touches && event.touches[0];
+				if (node) this.openMenuAt(node, point);
+				node = null;
+			}, 480);
+		},
+		{ passive: true }
+	);
+
+	this.listEl.addEventListener("touchmove", cancel, { passive: true });
+	this.listEl.addEventListener("touchend", cancel, { passive: true });
+	this.listEl.addEventListener("touchcancel", cancel, { passive: true });
+};
+
+MgView.prototype.openMenuAt = function (node, point) {
+	const path = node && node.dataset ? node.dataset.path : null;
+	if (!path) return;
+	const file = this.app.vault.getAbstractFileByPath(path);
+	if (!file) return;
+	const menu = new Menu();
+	const leaves = this.app.workspace.getLeavesOfType ? this.app.workspace.getLeavesOfType("file-explorer") : [];
+	const source = leaves && leaves.length > 0 ? leaves[0] : this.leaf;
+	this.app.workspace.trigger("file-menu", menu, file, "file-explorer", source);
+	const x = point ? point.clientX : 0;
+	const y = point ? point.clientY : 0;
+	menu.showAtPosition({ x, y });
+};
+
 /* ===== 40-search.js ===== */
 "use strict";
 
@@ -5462,7 +5518,7 @@ class ManagerPlugin extends Plugin {
 		const existing = this.app.workspace.getLeavesOfType(MG_MAP_TYPE);
 		let leaf = existing && existing.length > 0 ? existing[0] : null;
 		if (!leaf) {
-			leaf = this.app.workspace.getLeaf("tab");
+			leaf = this.app.workspace.getLeaf(Platform && Platform.isMobile ? true : "tab");
 			if (leaf) await leaf.setViewState({ type: MG_MAP_TYPE, active: true });
 		}
 		if (leaf && this.app.workspace.revealLeaf) {

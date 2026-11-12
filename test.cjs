@@ -6,6 +6,7 @@ const path = require("path");
 const Module = require("module");
 
 const stub = {
+	Platform: { isMobile: false, isMobileApp: false, isDesktop: true },
 	Plugin: class {},
 	ItemView: class {
 		constructor(leaf) {
