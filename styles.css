@@ -1102,3 +1102,45 @@ body.mg-booting-main .workspace-split.mod-root {
 .view-content.mg-view.is-mobile .mg-nav {
 	--mg-actions: 124px;
 }
+
+/* ---------- 行尾标记 ----------
+
+   放到右边, 左边留给标题 —— 标记放左边会把笔记标题往右推, 和文件夹标题
+   对不齐. 图标 13px, 颜色区分类型, 一行的多个标记横向并排. */
+
+.mg-marks {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	gap: 3px;
+}
+
+.mg-mark {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 13px;
+	height: 13px;
+}
+
+.mg-mark svg {
+	width: 13px;
+	height: 13px;
+	stroke-width: 1.6;
+}
+
+.mg-mark.is-orphan {
+	color: var(--color-orange, #e9973f);
+}
+
+.mg-mark.is-stale {
+	color: var(--color-blue, #4c8dff);
+}
+
+.mg-mark.is-noout {
+	color: var(--text-faint);
+}
+
+.mg-mark.is-empty {
+	color: var(--text-faint);
+}

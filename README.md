@@ -120,6 +120,23 @@ The list also picks up focus whenever you click a row. From there:
 - `Esc` — clear the filter, or leave create and reorder modes
 - `Ctrl+A` — mark every visible row
 
+## Row marks
+
+Each row can carry a small icon on the right, next to the size and time columns, so the state of a file stays visible while you browse instead of living in a report you have to open.
+
+- Plug pulled out — an attachment nothing links to
+- Hourglass — a note untouched for over a year
+- Broken chain — a note with no outgoing links
+- Folder with a dash, beside an empty folder — nothing inside it
+
+The icons sit on the right on purpose: anything on the left would push note titles inward and knock them out of line with folder headings.
+
+A note can show two at once — old and not linking anywhere. They come from a single pass over `metadataCache.resolvedLinks` while the index is built, so keeping them on costs nothing.
+
+Turn them off in settings; they are on by default.
+
+---
+
 ## Selecting several
 
 - `Ctrl` (or `Cmd`) click adds or removes one row
@@ -222,6 +239,12 @@ node test.cjs
 ---
 
 ## Version
+
+1.0.7
+
+- Row marks: orphan attachments, stale notes and notes without outgoing links, as icons on the right
+- Computed in a single pass over the link cache, no separate scan
+- Can be turned off in settings; on by default
 
 1.0.6
 

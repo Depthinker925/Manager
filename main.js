@@ -36,6 +36,7 @@ const MG_DEFAULT = {
 	keyboardMode: false,
 	showSize: false,
 	showTime: true,
+	showMarks: true,
 	density: "normal",
 	showMapIcon: true,
 	mapMode: "dynamic",
@@ -100,6 +101,27 @@ function mgUnique(taken, wanted, isFolder) {
 
    名称用中文排序规则，时间直接比较毫秒。手工顺序存在设置里，它排在最前面，
    不在手工顺序里的条目按当前排序规则跟在后面，这样新文件不会插到第一行。 */
+
+/* 行尾的标记图标. 附件只看有没有人链过来; 笔记可以同时既陈旧又没出链,
+   两个图标并排. 空文件夹由 count 判断, 不走这里. */
+const MG_MARK_ICON = {
+	orphan: "unplug",
+	stale: "hourglass",
+	noout: "unlink",
+	empty: "folder-minus"
+};
+
+function mgMarksOf(entry) {
+	const marks = [];
+	if (!entry) return marks;
+	if (entry.ext && entry.ext !== "md") {
+		if (!(entry.inbound > 0)) marks.push("orphan");
+		return marks;
+	}
+	if (entry.stale) marks.push("stale");
+	if (entry.outbound === 0) marks.push("noout");
+	return marks;
+}
 
 function mgFormatSize(bytes) {
 	const value = mgNumber(bytes);
@@ -371,6 +393,7 @@ const MG_LANGS = {
 		btnCancel: "取消",
 		batchPrefix: "笔记",
 		batchDone: "已重命名 %n 项",
+		setMarks: "行首标记",
 		setSupport: "支持作者 - 微信扫码",
 	},
 
@@ -439,6 +462,7 @@ const MG_LANGS = {
 		btnCancel: "取消",
 		batchPrefix: "筆記",
 		batchDone: "已重新命名 %n 項",
+		setMarks: "列首標記",
 		setSupport: "支持作者 - 微信掃碼",
 	},
 
@@ -507,6 +531,7 @@ const MG_LANGS = {
 		btnCancel: "Cancel",
 		batchPrefix: "Note",
 		batchDone: "Renamed %n items",
+		setMarks: "Row marks",
 		setSupport: "Support the author - WeChat QR",
 	},
 
@@ -575,6 +600,7 @@ const MG_LANGS = {
 		btnCancel: "キャンセル",
 		batchPrefix: "ノート",
 		batchDone: "%n 件の名前を変更しました",
+		setMarks: "行のマーク",
 		setSupport: "作者を支援 - WeChat QR",
 	},
 
@@ -643,6 +669,7 @@ const MG_LANGS = {
 		btnCancel: "취소",
 		batchPrefix: "노트",
 		batchDone: "%n개 이름을 바꿨습니다",
+		setMarks: "행 표시",
 		setSupport: "작가 후원 - 위챗 QR",
 	},
 
@@ -711,6 +738,7 @@ const MG_LANGS = {
 		btnCancel: "Abbrechen",
 		batchPrefix: "Notiz",
 		batchDone: "%n Elemente umbenannt",
+		setMarks: "Zeilenmarken",
 		setSupport: "Autor unterstützen - WeChat-QR",
 	},
 
@@ -779,6 +807,7 @@ const MG_LANGS = {
 		btnCancel: "Annuler",
 		batchPrefix: "Note",
 		batchDone: "%n éléments renommés",
+		setMarks: "Marques de ligne",
 		setSupport: "Soutenir l'auteur - QR WeChat",
 	},
 
@@ -847,6 +876,7 @@ const MG_LANGS = {
 		btnCancel: "Cancelar",
 		batchPrefix: "Nota",
 		batchDone: "%n elementos renombrados",
+		setMarks: "Marcas de fila",
 		setSupport: "Apoyar al autor - QR de WeChat",
 	}
 };
@@ -965,6 +995,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "Отмена",
 		batchPrefix: "Заметка",
 		batchDone: "Переименовано: %n",
+		setMarks: "Метки строк",
 		setSupport: "Поддержать автора — WeChat QR",
 	},
 	it: {
@@ -1032,6 +1063,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "Annulla",
 		batchPrefix: "Nota",
 		batchDone: "%n elementi rinominati",
+		setMarks: "Contrassegni di riga",
 		setSupport: "Sostieni l'autore - QR WeChat",
 	},
 	pt: {
@@ -1099,6 +1131,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "Cancelar",
 		batchPrefix: "Nota",
 		batchDone: "%n itens renomeados",
+		setMarks: "Marcas de linha",
 		setSupport: "Apoiar o autor - QR WeChat",
 	},
 	"pt-BR": {
@@ -1166,6 +1199,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "Cancelar",
 		batchPrefix: "Nota",
 		batchDone: "%n itens renomeados",
+		setMarks: "Marcas de linha",
 		setSupport: "Apoiar o autor - QR WeChat",
 	},
 	pl: {
@@ -1233,6 +1267,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "Anuluj",
 		batchPrefix: "Notatka",
 		batchDone: "Zmieniono nazwy: %n",
+		setMarks: "Znaczniki wierszy",
 		setSupport: "Wesprzyj autora - QR WeChat",
 	},
 	nl: {
@@ -1300,6 +1335,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "Annuleren",
 		batchPrefix: "Notitie",
 		batchDone: "%n items hernoemd",
+		setMarks: "Rijmarkeringen",
 		setSupport: "Auteur steunen - WeChat-QR",
 	},
 	tr: {
@@ -1367,6 +1403,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "İptal",
 		batchPrefix: "Not",
 		batchDone: "%n öğe yeniden adlandırıldı",
+		setMarks: "Satır işaretleri",
 		setSupport: "Yazarı destekle - WeChat QR",
 	},
 	uk: {
@@ -1434,6 +1471,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "Скасувати",
 		batchPrefix: "Нотатка",
 		batchDone: "Перейменовано: %n",
+		setMarks: "Позначки рядків",
 		setSupport: "Підтримати автора - WeChat QR",
 	},
 	id: {
@@ -1501,6 +1539,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "Batal",
 		batchPrefix: "Catatan",
 		batchDone: "%n item diganti nama",
+		setMarks: "Penanda baris",
 		setSupport: "Dukung penulis - QR WeChat",
 	},
 	vi: {
@@ -1568,6 +1607,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "Huỷ",
 		batchPrefix: "Ghi chú",
 		batchDone: "Đã đổi tên %n mục",
+		setMarks: "Dấu dòng",
 		setSupport: "Ủng hộ tác giả - QR WeChat",
 	},
 	sv: {
@@ -1635,6 +1675,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "Avbryt",
 		batchPrefix: "Anteckning",
 		batchDone: "%n objekt omdöpta",
+		setMarks: "Radmarkeringar",
 		setSupport: "Stöd författaren - WeChat-QR",
 	},
 	da: {
@@ -1702,6 +1743,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "Annuller",
 		batchPrefix: "Note",
 		batchDone: "%n elementer omdøbt",
+		setMarks: "Rækkemarkeringer",
 		setSupport: "Støt forfatteren - WeChat-QR",
 	},
 	no: {
@@ -1769,6 +1811,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "Avbryt",
 		batchPrefix: "Notat",
 		batchDone: "%n elementer gitt nytt navn",
+		setMarks: "Radmarkeringer",
 		setSupport: "Støtt forfatteren - WeChat-QR",
 	},
 	fi: {
@@ -1836,6 +1879,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "Peruuta",
 		batchPrefix: "Muistiinpano",
 		batchDone: "%n kohdetta nimettiin uudelleen",
+		setMarks: "Rivimerkinnät",
 		setSupport: "Tue tekijää - WeChat-QR",
 	},
 	cs: {
@@ -1903,6 +1947,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "Zrušit",
 		batchPrefix: "Poznámka",
 		batchDone: "Přejmenováno: %n",
+		setMarks: "Značky řádků",
 		setSupport: "Podpořit autora - WeChat QR",
 	},
 	sk: {
@@ -1970,6 +2015,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "Zrušiť",
 		batchPrefix: "Poznámka",
 		batchDone: "Premenovaných: %n",
+		setMarks: "Značky riadkov",
 		setSupport: "Podporiť autora - WeChat QR",
 	},
 	sl: {
@@ -2037,6 +2083,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "Prekliči",
 		batchPrefix: "Zapisek",
 		batchDone: "Preimenovanih: %n",
+		setMarks: "Oznake vrstic",
 		setSupport: "Podpri avtorja - WeChat QR",
 	},
 	sr: {
@@ -2104,6 +2151,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "Otkaži",
 		batchPrefix: "Beleška",
 		batchDone: "Preimenovano: %n",
+		setMarks: "Oznake redova",
 		setSupport: "Podrži autora - WeChat QR",
 	},
 	hr: {
@@ -2171,6 +2219,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "Odustani",
 		batchPrefix: "Bilješka",
 		batchDone: "Preimenovano: %n",
+		setMarks: "Oznake redaka",
 		setSupport: "Podrži autora - WeChat QR",
 	},
 	hu: {
@@ -2238,6 +2287,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "Mégse",
 		batchPrefix: "Jegyzet",
 		batchDone: "%n elem átnevezve",
+		setMarks: "Sormegjelölés",
 		setSupport: "Szerző támogatása - WeChat QR",
 	},
 	ro: {
@@ -2305,6 +2355,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "Anulează",
 		batchPrefix: "Notă",
 		batchDone: "%n elemente redenumite",
+		setMarks: "Marcaje pe rând",
 		setSupport: "Susține autorul - QR WeChat",
 	},
 	ca: {
@@ -2372,6 +2423,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "Cancel·la",
 		batchPrefix: "Nota",
 		batchDone: "%n elements reanomenats",
+		setMarks: "Marques de fila",
 		setSupport: "Dona suport a l'autor - QR WeChat",
 	},
 	el: {
@@ -2439,6 +2491,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "Άκυρο",
 		batchPrefix: "Σημείωση",
 		batchDone: "Μετονομάστηκαν %n στοιχεία",
+		setMarks: "Σημάδια σειράς",
 		setSupport: "Υποστηρίξτε τον δημιουργό - WeChat QR",
 	},
 	hi: {
@@ -2506,6 +2559,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "रद्द करें",
 		batchPrefix: "नोट",
 		batchDone: "%n आइटम का नाम बदला",
+		setMarks: "पंक्ति चिह्न",
 		setSupport: "लेखक का साथ दें - WeChat QR",
 	},
 	th: {
@@ -2573,6 +2627,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "ยกเลิก",
 		batchPrefix: "โน้ต",
 		batchDone: "เปลี่ยนชื่อ %n รายการแล้ว",
+		setMarks: "เครื่องหมายแถว",
 		setSupport: "สนับสนุนผู้พัฒนา - WeChat QR",
 	},
 	ar: {
@@ -2640,6 +2695,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "إلغاء",
 		batchPrefix: "ملاحظة",
 		batchDone: "تمت إعادة تسمية %n عناصر",
+		setMarks: "علامات الصفوف",
 		setSupport: "ادعم المؤلف - WeChat QR",
 	},
 	he: {
@@ -2707,6 +2763,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "ביטול",
 		batchPrefix: "פתק",
 		batchDone: "%n פריטים שונו",
+		setMarks: "סימוני שורות",
 		setSupport: "תמכו ביוצר - WeChat QR",
 	},
 	fa: {
@@ -2774,6 +2831,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "انصراف",
 		batchPrefix: "یادداشت",
 		batchDone: "نام %n مورد تغییر کرد",
+		setMarks: "نشانه‌های سطر",
 		setSupport: "حمایت از نویسنده - WeChat QR",
 	},
 	be: {
@@ -2841,6 +2899,7 @@ const MG_LANGS_EXTRA = {
 		btnCancel: "Адмена",
 		batchPrefix: "Нататка",
 		batchDone: "Перайменавана: %n",
+		setMarks: "Значкі радкоў",
 		setSupport: "Падтрымаць аўтара - WeChat QR",
 	},
 };
@@ -2875,9 +2934,28 @@ class MgIndex {
 	   收的是库里全部文件, 不只有 md: pdf、图片、音频、视频、canvas 在 Obsidian
 	   里都能打开, 只列笔记等于把它们藏起来. 标题上 md 去掉扩展名, 其它保留,
 	   因为 "扫描件" 和 "扫描件.pdf" 差别很大. */
+	/* 入链只查一次: resolvedLinks 是 { 源: { 目标: 次数 } }, 反过来铺一遍
+	   就有每个文件的入链数, 顺带也得到出链数. 没装链接缓存的场合留空,
+	   标记就一个都不画. */
+	buildLinks() {
+		const inbound = new Map();
+		const outbound = new Map();
+		const cache = this.app && this.app.metadataCache;
+		const links = cache && cache.resolvedLinks;
+		if (!links) return { inbound, outbound };
+		for (const source of Object.keys(links)) {
+			const targets = links[source] || {};
+			const keys = Object.keys(targets);
+			outbound.set(source, keys.length);
+			for (const target of keys) inbound.set(target, (inbound.get(target) || 0) + 1);
+		}
+		return { inbound, outbound };
+	}
+
 	build(blocked) {
 		this.blocked = Array.isArray(blocked) ? blocked : mgBlockedList(blocked);
 		const vault = this.app.vault;
+		const links = this.buildLinks();
 		const files = typeof vault.getFiles === "function"
 			? vault.getFiles()
 			: typeof vault.getMarkdownFiles === "function"
@@ -2889,15 +2967,19 @@ class MgIndex {
 				const stat = file.stat || {};
 				const name = String(file.name || mgBase(file.path));
 				const ext = String(file.extension || mgExt(name).replace(".", "")).toLowerCase();
+				const mtime = mgNumber(stat.mtime);
 				return {
 					path: String(file.path),
 					name,
 					ext,
 					title: ext === "md" ? String(file.basename || mgStem(name)) : name,
 					parent: mgDir(file.path),
-					mtime: mgNumber(stat.mtime),
+					mtime,
 					ctime: mgNumber(stat.ctime),
-					size: mgNumber(stat.size)
+					size: mgNumber(stat.size),
+					inbound: links.inbound.get(String(file.path)) || 0,
+					outbound: links.outbound.get(String(file.path)) || 0,
+					stale: ext === "md" && mtime > 0 && Date.now() - mtime > 365 * 86400000
 				};
 			});
 		this.byPath = new Map(this.entries.map((entry) => [entry.path, entry]));
@@ -3252,6 +3334,7 @@ class MgView extends ItemView {
 		root.classList.toggle("is-static", this.plugin.data.animations === false);
 		this.keyboardMode = this.plugin.data.keyboardMode === true;
 		this.showSize = this.plugin.data.showSize === true;
+		this.showMarks = this.plugin.data.showMarks !== false;
 		this.showTime = this.plugin.data.showTime !== false;
 		const density = this.plugin.data.density || "normal";
 		root.classList.toggle("is-compact", density === "compact");
@@ -3640,8 +3723,13 @@ class MgView extends ItemView {
 		head.appendChild(name);
 
 		/* 空文件夹不写 0: 一整列 0 是噪音, 标题本身已经在说这里是空的. */
-		if (row.count > 0 || (this.showSize && row.size > 0)) {
+		if (row.count > 0 || (this.showSize && row.size > 0) || (this.showMarks && row.count === 0)) {
 			const tail = mgEl("span", "mg-folder-tail");
+			if (row.count === 0 && this.showMarks) {
+				const icon = mgEl("span", "mg-mark is-empty");
+				setIcon(icon, MG_MARK_ICON.empty);
+				tail.appendChild(icon);
+			}
 			if (row.count > 0) tail.appendChild(mgEl("span", "mg-folder-count", String(row.count)));
 			if (this.showSize && row.size > 0) tail.appendChild(mgEl("span", "mg-folder-size", mgFormatSize(row.size)));
 			head.appendChild(tail);
@@ -3715,9 +3803,24 @@ class MgView extends ItemView {
 			line.classList.add("is-two-line");
 		}
 		line.appendChild(main);
+		/* 标记放右侧. 放左边会把标题往右推, 和文件夹标题对不齐. */
+		if (this.showMarks) {
+			const marks = mgMarksOf(entry);
+			if (marks.length > 0) line.appendChild(this.marksNode(marks));
+		}
 		if (this.showSize) line.appendChild(mgEl("span", "mg-note-size", mgFormatSize(entry.size)));
 		if (this.showTime) line.appendChild(mgEl("span", "mg-note-when", mgRelative(entry.mtime)));
 		return line;
+	}
+
+	marksNode(marks) {
+		const box = mgEl("span", "mg-marks");
+		for (const mark of marks) {
+			const icon = mgEl("span", "mg-mark is-" + mark);
+			setIcon(icon, MG_MARK_ICON[mark] || "circle");
+			box.appendChild(icon);
+		}
+		return box;
 	}
 
 	syncStatus(shown, total) {
@@ -5625,6 +5728,9 @@ module.exports.__core = {
 	mgRelative,
 	mgNumber,
 	mgBlockedList,
+	mgMarksOf,
+	MG_MARK_ICON,
+	mgFormatSize,
 	mgParseFilter,
 	mgMatchFilter,
 	mgMatchTerms,
